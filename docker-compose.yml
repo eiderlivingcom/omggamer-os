@@ -1,0 +1,110 @@
+# OMGGamer OS production stack (XGamer Main, behind xCloud's nginx + TLS).
+# Only the web service publishes a port, and only on 127.0.0.1; xCloud proxies os.omggamer.com to it.
+# Postgres and Redis are private to this stack. Values come from .env (written by xCloud at deploy time).
+
+name: omggamer-os
+
+x-api-env: &api-env
+  ENVIRONMENT: production
+  APP_ORIGIN: ${APP_ORIGIN:-https://os.omggamer.com}
+  DATABASE_URL: postgresql+asyncpg://omgos:${POSTGRES_PASSWORD}@postgres:5432/omggamer_os
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: ${SECRET_KEY}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+  BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+  BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Super Admin}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: omggamer_os
+      POSTGRES_USER: omgos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omgos -d omggamer_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  worker:
+    build: ./apps/api
+    restart: unless-stopped
+    environment: *api-env
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "default,imports,ai,publish", "--concurrency", "4", "-l", "info"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  beat:
+    build: ./apps/api
+    restart: unless-stopped
+    environment: *api-env
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "-l", "info", "-s", "/tmp/celerybeat-schedule"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  web:
+    build: ./apps/web
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      api: { condition: service_healthy }
+
+  backup:
+    # Nightly pg_dump kept for 14 days in the "backups" volume.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          ts=$$(date -u +%Y%m%dT%H%M%SZ)
+          pg_dump -h postgres -U omgos -d omggamer_os -Fc -f /backups/omggamer_os_$$ts.dump && echo "backup ok $$ts"
+          find /backups -name 'omggamer_os_*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  redisdata:
+  backups:
