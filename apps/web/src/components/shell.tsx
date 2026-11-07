@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { NAV } from "@/lib/nav";
+import { CURRENT_PHASE, NAV } from "@/lib/nav";
 import { useSession } from "@/lib/session";
 import { Icon } from "./icon";
 import { cx } from "./ui";
@@ -52,7 +52,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <ul className="space-y-0.5">
             {nav.map((n) => {
               const active = isActive(path, n.href);
-              const live = n.sections.some((s) => s.phase <= 1);
+              const live = n.sections.some((s) => s.phase <= CURRENT_PHASE);
               return (
                 <li key={n.href}>
                   <Link

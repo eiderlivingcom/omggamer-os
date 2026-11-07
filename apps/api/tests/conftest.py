@@ -40,6 +40,8 @@ DATA_TABLES = [
     "publishing_queue",
     "storefront_product_mappings",
     "ai_jobs",
+    "supplier_connections",
+    "import_logs",
     "import_failures",
     "import_jobs",
     "supplier_offers",
@@ -73,6 +75,12 @@ async def clean() -> AsyncIterator[None]:
         await db.execute(text(f"TRUNCATE {', '.join(DATA_TABLES)} RESTART IDENTITY CASCADE"))
         # Suppliers and storefronts are seeded by migrations; drop only rows that tests added.
         await db.execute(text("DELETE FROM suppliers WHERE code <> 'kinguin'"))
+        await db.execute(
+            text(
+                "UPDATE suppliers SET configuration = configuration"
+                " - 'min_request_interval_ms' - 'active_environment'"
+            )
+        )
         await db.execute(
             text("DELETE FROM storefronts WHERE code NOT IN ('omggamer-live', 'omggamer-staging')")
         )

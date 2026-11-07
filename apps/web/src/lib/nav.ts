@@ -1,5 +1,8 @@
 // Main navigation. `phase` is when a section becomes functional; pages show that honestly instead of sample data.
 
+/** The highest phase that is deployed. Sections up to it are live. */
+export const CURRENT_PHASE = 3;
+
 export type NavSection = { label: string; phase: number };
 export type NavItem = { href: string; label: string; icon: string; perm: string; sections: NavSection[] };
 
@@ -21,11 +24,11 @@ export const NAV: NavItem[] = [
     icon: "box",
     perm: "catalogue:read",
     sections: [
-      { label: "All products", phase: 3 },
-      { label: "Drafts", phase: 3 },
-      { label: "Product variants", phase: 3 },
-      { label: "Supplier offers", phase: 2 },
-      { label: "Archived products", phase: 3 },
+      { label: "All products", phase: 4 },
+      { label: "Drafts", phase: 4 },
+      { label: "Product variants", phase: 4 },
+      { label: "Supplier offers", phase: 3 },
+      { label: "Archived products", phase: 4 },
     ],
   },
   {
@@ -34,11 +37,11 @@ export const NAV: NavItem[] = [
     icon: "truck",
     perm: "suppliers:read",
     sections: [
-      { label: "Supplier directory", phase: 2 },
-      { label: "API connections", phase: 2 },
-      { label: "Import manager", phase: 2 },
-      { label: "Import history", phase: 2 },
-      { label: "Supplier product mappings", phase: 2 },
+      { label: "Supplier directory", phase: 3 },
+      { label: "API connections", phase: 3 },
+      { label: "Import manager", phase: 3 },
+      { label: "Import history", phase: 3 },
+      { label: "Supplier product mappings", phase: 3 },
     ],
   },
   {
@@ -47,11 +50,11 @@ export const NAV: NavItem[] = [
     icon: "spark",
     perm: "content:write",
     sections: [
-      { label: "Content generation", phase: 4 },
-      { label: "SEO generation", phase: 4 },
-      { label: "AI job queue", phase: 4 },
-      { label: "Prompt management", phase: 4 },
-      { label: "AI usage and cost", phase: 4 },
+      { label: "Content generation", phase: 5 },
+      { label: "SEO generation", phase: 5 },
+      { label: "AI job queue", phase: 5 },
+      { label: "Prompt management", phase: 5 },
+      { label: "AI usage and cost", phase: 5 },
     ],
   },
   {
@@ -60,11 +63,11 @@ export const NAV: NavItem[] = [
     icon: "tag",
     perm: "catalogue:read",
     sections: [
-      { label: "Product categories", phase: 3 },
-      { label: "Subcategories", phase: 3 },
-      { label: "Attributes", phase: 3 },
-      { label: "Tags", phase: 3 },
-      { label: "Supplier category mappings", phase: 3 },
+      { label: "Product categories", phase: 6 },
+      { label: "Subcategories", phase: 6 },
+      { label: "Attributes", phase: 6 },
+      { label: "Tags", phase: 6 },
+      { label: "Supplier category mappings", phase: 6 },
     ],
   },
   {
@@ -73,10 +76,10 @@ export const NAV: NavItem[] = [
     icon: "coin",
     perm: "pricing:read",
     sections: [
-      { label: "Pricing rules", phase: 3 },
-      { label: "Margin settings", phase: 3 },
-      { label: "Currency settings", phase: 3 },
-      { label: "Price history", phase: 3 },
+      { label: "Pricing rules", phase: 6 },
+      { label: "Margin settings", phase: 6 },
+      { label: "Currency settings", phase: 6 },
+      { label: "Price history", phase: 6 },
     ],
   },
   {
@@ -85,10 +88,10 @@ export const NAV: NavItem[] = [
     icon: "image",
     perm: "catalogue:read",
     sections: [
-      { label: "Product images", phase: 3 },
-      { label: "Media library", phase: 3 },
-      { label: "Image processing", phase: 3 },
-      { label: "Image validation", phase: 3 },
+      { label: "Product images", phase: 4 },
+      { label: "Media library", phase: 4 },
+      { label: "Image processing", phase: 4 },
+      { label: "Image validation", phase: 4 },
     ],
   },
   {
@@ -97,10 +100,10 @@ export const NAV: NavItem[] = [
     icon: "send",
     perm: "catalogue:read",
     sections: [
-      { label: "Approval queue", phase: 5 },
-      { label: "Publishing queue", phase: 5 },
-      { label: "Published products", phase: 5 },
-      { label: "Synchronisation failures", phase: 5 },
+      { label: "Approval queue", phase: 7 },
+      { label: "Publishing queue", phase: 7 },
+      { label: "Published products", phase: 7 },
+      { label: "Synchronisation failures", phase: 7 },
     ],
   },
   {
@@ -109,10 +112,10 @@ export const NAV: NavItem[] = [
     icon: "receipt",
     perm: "orders:read",
     sections: [
-      { label: "Customer orders", phase: 6 },
-      { label: "Supplier fulfilment", phase: 6 },
-      { label: "Failed orders", phase: 6 },
-      { label: "Refund management", phase: 6 },
+      { label: "Customer orders", phase: 9 },
+      { label: "Supplier fulfilment", phase: 9 },
+      { label: "Failed orders", phase: 9 },
+      { label: "Refund management", phase: 9 },
     ],
   },
   {
@@ -121,10 +124,10 @@ export const NAV: NavItem[] = [
     icon: "chart",
     perm: "analytics:read",
     sections: [
-      { label: "Catalogue analytics", phase: 7 },
-      { label: "Supplier analytics", phase: 7 },
-      { label: "AI cost analytics", phase: 7 },
-      { label: "Sales analytics", phase: 7 },
+      { label: "Catalogue analytics", phase: 10 },
+      { label: "Supplier analytics", phase: 10 },
+      { label: "AI cost analytics", phase: 10 },
+      { label: "Sales analytics", phase: 10 },
     ],
   },
   {
@@ -133,10 +136,10 @@ export const NAV: NavItem[] = [
     icon: "clock",
     perm: "automation:manage",
     sections: [
-      { label: "Scheduled imports", phase: 7 },
-      { label: "Price synchronisation", phase: 7 },
-      { label: "Stock synchronisation", phase: 7 },
-      { label: "Scheduled AI processing", phase: 7 },
+      { label: "Scheduled imports", phase: 10 },
+      { label: "Price synchronisation", phase: 8 },
+      { label: "Stock synchronisation", phase: 8 },
+      { label: "Scheduled AI processing", phase: 10 },
     ],
   },
   {
@@ -147,7 +150,7 @@ export const NAV: NavItem[] = [
     sections: [
       { label: "User management", phase: 1 },
       { label: "Roles and permissions", phase: 1 },
-      { label: "API credentials", phase: 2 },
+      { label: "API credentials", phase: 3 },
       { label: "Audit logs", phase: 1 },
     ],
   },

@@ -19,6 +19,7 @@ from app.db.models.jobs import (
     DeadLetter,
     ImportFailure,
     ImportJob,
+    ImportLog,
     PublishingQueueItem,
     WebhookInbox,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "DeadLetter",
     "ImportFailure",
     "ImportJob",
+    "ImportLog",
     "Permission",
     "Product",
     "ProductCategory",

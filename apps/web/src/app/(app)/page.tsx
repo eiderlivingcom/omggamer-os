@@ -77,7 +77,7 @@ export default function DashboardPage() {
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card title="Catalogue by status" className="xl:col-span-2">
           {total === 0 ? (
-            <Empty title="No products yet">Products appear here after the first Kinguin import (Phase 2).</Empty>
+            <Empty title="No products yet">Products appear here after the first Kinguin import (Suppliers → Kinguin).</Empty>
           ) : (
             <>
               <div className="flex h-3 overflow-hidden rounded-full bg-ink-100" role="img" aria-label="Products by status">

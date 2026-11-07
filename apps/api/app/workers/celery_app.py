@@ -36,7 +36,9 @@ celery_app.conf.update(
     result_expires=60 * 60 * 24,
     broker_connection_retry_on_startup=True,
     timezone="UTC",
-    beat_schedule={},
+    beat_schedule={
+        "imports-watchdog": {"task": "imports.watchdog", "schedule": 120.0},
+    },
 )
 
 _sync_engine = None

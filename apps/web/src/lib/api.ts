@@ -88,3 +88,44 @@ export type Summary = {
 };
 
 export type Health = { ok: boolean; checks: { name: string; ok: boolean; detail: string }[]; version: string; migration: string | null };
+
+export type Environment = "live" | "sandbox";
+export type Connection = { environment: Environment; configured: boolean; status: string; last_checked_at: string | null; last_error: string | null };
+export type SupplierConnections = { supplier: string; name: string; active_environment: Environment; connections: Connection[] };
+
+export type ImportJob = {
+  id: string;
+  job_type: "full" | "incremental" | "single" | "retry_failed";
+  status: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  params: Record<string, unknown>;
+  total_records: number | null;
+  processed_records: number;
+  created_records: number;
+  updated_records: number;
+  skipped_records: number;
+  failed_records: number;
+  saved_records: number;
+  api_requests: number;
+  current_page: number | null;
+  checkpoint: Record<string, unknown>;
+  last_checkpoint_at: string | null;
+  last_response_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  last_error: string | null;
+  created_at: string;
+};
+
+export type ImportOverview = {
+  supplier: string;
+  name: string;
+  active_environment: Environment;
+  connection_status: string;
+  active_job: ImportJob | null;
+  recent_jobs: ImportJob[];
+  totals: { supplier_products: number; variants: number; offers: number; offers_in_stock: number; unresolved_failures: number };
+};
+
+export type ImportLog = { id: number; level: "info" | "warning" | "error"; message: string; data: Record<string, unknown>; created_at: string };
+export type ImportFailure = { id: string; external_product_id: string; error: string; attempts: number; created_at: string };

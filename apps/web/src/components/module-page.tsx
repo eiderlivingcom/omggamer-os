@@ -1,16 +1,18 @@
 "use client";
 
-import { NAV } from "@/lib/nav";
+import { CURRENT_PHASE, NAV } from "@/lib/nav";
 import type { ReactNode } from "react";
 import { Card, Empty, PageHeader, Pill } from "./ui";
 
 const PHASE_TEXT: Record<number, string> = {
-  2: "Phase 2 · Kinguin import",
-  3: "Phase 3 · Catalogue and pricing",
-  4: "Phase 4 · AI Studio",
-  5: "Phase 5 · WordPress sync",
-  6: "Phase 6 · Orders",
-  7: "Phase 7 · Analytics and automation",
+  3: "Phase 3 · Kinguin import",
+  4: "Phase 4 · Product management",
+  5: "Phase 5 · AI content",
+  6: "Phase 6 · Categories, attributes and pricing",
+  7: "Phase 7 · WooCommerce sync",
+  8: "Phase 8 · Price and stock sync",
+  9: "Phase 9 · Orders and fulfilment",
+  10: "Phase 10 · Analytics and automation",
 };
 
 /** A module that is planned but not built yet: lists its sections and which phase delivers each. */
@@ -26,7 +28,7 @@ export function ModulePage({ href, description, children }: { href: string; desc
           {item.sections.map((s) => (
             <li key={s.label} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
               <span className="text-sm font-medium text-ink-900">{s.label}</span>
-              <Pill tone={s.phase <= 1 ? "ok" : "muted"}>{s.phase <= 1 ? "Live" : PHASE_TEXT[s.phase]}</Pill>
+              <Pill tone={s.phase <= CURRENT_PHASE ? "ok" : "muted"}>{s.phase <= CURRENT_PHASE ? "Live" : PHASE_TEXT[s.phase]}</Pill>
             </li>
           ))}
         </ul>

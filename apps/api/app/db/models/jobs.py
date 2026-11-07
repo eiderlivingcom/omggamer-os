@@ -83,6 +83,29 @@ class ImportFailure(UUIDPk, Timestamps, Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+LOG_LEVELS = ("info", "warning", "error")
+
+
+class ImportLog(Base):
+    """What an import did, page by page: shown under "View logs" on the import dashboard."""
+
+    __tablename__ = "import_logs"
+    __table_args__ = (
+        CheckConstraint(_in("level", LOG_LEVELS), name="level_valid"),
+        Index("ix_import_logs_job_created", "import_job_id", "id"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    import_job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("import_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    level: Mapped[str] = mapped_column(String(10), nullable=False, default="info")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class AiJob(UUIDPk, Timestamps, Base):
     __tablename__ = "ai_jobs"
     __table_args__ = (CheckConstraint(_in("status", JOB_STATUSES), name="status_valid"),)

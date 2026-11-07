@@ -11,7 +11,25 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
-## Phase 2 (this release): central catalogue engine
+## Phase 3 (this release): Kinguin integration and catalogue import
+
+- Separate Kinguin adapter (`app/suppliers/kinguin`): API client, normaliser, and a contract the import runner
+  uses for every supplier. Endpoints, page size (100) and auth (`X-Api-Key`) follow the official Kinguin docs.
+- The API key is entered under Settings → API credentials. It is encrypted at rest, never returned and tested
+  against `GET /v1/regions`. Production and sandbox keys are kept separately.
+- Imports run in Celery (`imports` queue) in 10-minute chunks. Every page is saved with a checkpoint in the same
+  transaction, so a crashed worker loses at most one page and resumes on its own. A watchdog re-queues stalled
+  jobs every 2 minutes, and a per-job advisory lock stops two workers running the same job.
+- 429s honour `Retry-After` (Kinguin documents no rate limit, so requests are also spaced 250 ms apart).
+  Timeouts and 5xx back off exponentially. A bad key stops the job with a clear message.
+- Records that cannot be saved go to `import_failures` with their original payload, for "Retry failed records".
+- Import types: test batches (100, 1,000, 10,000), full, update (`updatedSince`), single product and retry
+  failed. A full import queues an automatic catch-up for products changed while it ran.
+- The Suppliers page is the import dashboard: live metrics, Start, Pause, Resume, Cancel, Retry failed records,
+  the page-by-page log and the failed records.
+- Nothing is published to WooCommerce and no AI content is generated during import.
+
+## Phase 2: central catalogue engine
 
 - Three separate concepts: a **master product** (one game), its **variants** (platform, edition, region,
   activation type, language) and **supplier offers** (a seller's price and stock for one variant). One supplier
@@ -101,9 +119,12 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `GET /catalogue/supplier-products/{id}` | Original supplier data, including the raw payload |
 | `GET/POST /catalogue/categories` · `PATCH/DELETE /catalogue/categories/{id}` | Category tree |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
+| `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
+| `GET /imports/overview` · `GET/POST /imports` · `GET /imports/{id}` | Import dashboard, start an import |
+| `POST /imports/{id}/pause` · `/resume` · `/cancel` · `GET /imports/{id}/logs` · `/failures` | Control and inspect imports |
 
 ## Next phases
 
-Phase 3 is the Kinguin connection and a resumable catalogue import into this schema. Later phases follow the
-OMGGamer OS master specification: catalogue editor and pricing, AI Studio, WooCommerce sync with omggamer.com,
-orders and fulfilment, analytics and automation.
+Phase 4 is the product management interface. Later phases follow the OMGGamer OS master specification:
+AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
+fulfilment, analytics and automation.

@@ -63,6 +63,15 @@ def base_title(title: str) -> str:
     return t.strip() or (title or "").strip()
 
 
+def edition_of(title: str) -> str | None:
+    """The edition named in a supplier title ("Gold Edition", "GOTY"): editions are separate variants."""
+    m = _EDITION_RE.search(_BRACKETS.sub(" ", title or ""))
+    if not m:
+        return None
+    words = m.group(0).strip()
+    return words.upper() if words.lower() == "goty" else " ".join(w.capitalize() for w in words.split())
+
+
 def match_key(title: str) -> str:
     """Grouping key: folded base title with punctuation removed."""
     k = fold(base_title(title))
