@@ -11,14 +11,13 @@ from sqlalchemy.sql import Select
 from app.core.deps import DB, require
 from app.db.models import (
     AiJob,
-    AiUsage,
     AuditLog,
-    ChannelListing,
     DeadLetter,
     ImportJob,
     Product,
     ProductVariant,
-    PublishJob,
+    PublishingQueueItem,
+    StorefrontProductMapping,
     Supplier,
     SupplierConnection,
     SupplierOffer,
@@ -88,18 +87,19 @@ async def _by_state(db: DB, col: object, model: object) -> dict[str, int]:
 @router.get("/summary", response_model=Summary)
 async def summary(db: DB, _: User = require("dashboard:read")) -> Summary:
     by_status = {s: 0 for s in PRODUCT_STATUSES}
-    by_status.update(await _by_state(db, Product.status, Product))
-    imports = await _by_state(db, ImportJob.state, ImportJob)
-    ai = await _by_state(db, AiJob.state, AiJob)
-    listings = await _by_state(db, ChannelListing.sync_status, ChannelListing)
+    by_status.update(await _by_state(db, Product.product_status, Product))
+    by_status.pop("merged", None)
+    imports = await _by_state(db, ImportJob.status, ImportJob)
+    ai = await _by_state(db, AiJob.status, AiJob)
+    listings = await _by_state(db, StorefrontProductMapping.sync_status, StorefrontProductMapping)
     cost = await db.scalar(
-        select(func.coalesce(func.sum(AiUsage.cost_usd), 0)).where(
-            AiUsage.created_at > func.now() - func.make_interval(0, 0, 0, 30)
+        select(func.coalesce(func.sum(AiJob.estimated_cost), 0)).where(
+            AiJob.created_at > func.now() - func.make_interval(0, 0, 0, 30)
         )
     )
     return Summary(
         catalogue=CatalogueStats(
-            products=sum(by_status.values()),
+            products=sum(by_status.values()),  # merged duplicates are not counted
             by_status=by_status,
             variants=await _count(db, select(func.count()).select_from(ProductVariant)),
         ),
@@ -113,20 +113,26 @@ async def summary(db: DB, _: User = require("dashboard:read")) -> Summary:
             ),
             supplier_products=await _count(db, select(func.count()).select_from(SupplierProduct)),
             active_offers=await _count(
-                db, select(func.count()).select_from(SupplierOffer).where(SupplierOffer.is_active.is_(True))
+                db,
+                select(func.count())
+                .select_from(SupplierOffer)
+                .where(
+                    SupplierOffer.availability_status.in_(["in_stock", "preorder"]),
+                    SupplierOffer.available_quantity > 0,
+                ),
             ),
         ),
         imports=ImportStats(
             running=imports.get("running", 0),
             queued=imports.get("queued", 0),
             failed=imports.get("failed", 0),
-            last_finished_at=await db.scalar(select(func.max(ImportJob.finished_at))),
+            last_finished_at=await db.scalar(select(func.max(ImportJob.completed_at))),
         ),
         ai=AiStats(
             queued=ai.get("queued", 0),
             running=ai.get("running", 0),
             failed=ai.get("failed", 0),
-            succeeded=ai.get("succeeded", 0),
+            succeeded=ai.get("completed", 0),
             cost_usd_30d=Decimal(str(cost or 0)),
         ),
         publishing=PublishingStats(
@@ -136,8 +142,8 @@ async def summary(db: DB, _: User = require("dashboard:read")) -> Summary:
             publish_queue=await _count(
                 db,
                 select(func.count())
-                .select_from(PublishJob)
-                .where(PublishJob.state.in_(["queued", "running"])),
+                .select_from(PublishingQueueItem)
+                .where(PublishingQueueItem.status.in_(["queued", "running"])),
             ),
         ),
         dead_letters_open=await _count(

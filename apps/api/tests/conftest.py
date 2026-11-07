@@ -36,14 +36,18 @@ DATA_TABLES = [
     "refresh_tokens",
     "audit_logs",
     "dead_letters",
-    "ai_usage",
+    "sync_logs",
+    "publishing_queue",
+    "storefront_product_mappings",
     "ai_jobs",
-    "publish_jobs",
-    "channel_listings",
-    "import_job_chunks",
+    "import_failures",
     "import_jobs",
     "supplier_offers",
     "supplier_products",
+    "product_content",
+    "product_media",
+    "product_category_mappings",
+    "product_categories",
     "product_variants",
     "products",
     "webhook_inbox",
@@ -67,6 +71,11 @@ def database() -> None:
 async def clean() -> AsyncIterator[None]:
     async with get_sessionmaker()() as db:
         await db.execute(text(f"TRUNCATE {', '.join(DATA_TABLES)} RESTART IDENTITY CASCADE"))
+        # Suppliers and storefronts are seeded by migrations; drop only rows that tests added.
+        await db.execute(text("DELETE FROM suppliers WHERE code <> 'kinguin'"))
+        await db.execute(
+            text("DELETE FROM storefronts WHERE code NOT IN ('omggamer-live', 'omggamer-staging')")
+        )
         await db.commit()
     await get_redis().flushdb()
     yield

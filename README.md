@@ -11,7 +11,23 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
-## Phase 1 (this release)
+## Phase 2 (this release): central catalogue engine
+
+- Three separate concepts: a **master product** (one game), its **variants** (platform, edition, region,
+  activation type, language) and **supplier offers** (a seller's price and stock for one variant). One supplier
+  record is never assumed to be one master product.
+- `supplier_products` keeps the supplier's original title, description and full raw payload. Edits made in
+  OMGGamer OS go on `products` and `product_content` and are never overwritten by a re-import.
+- Ingest is idempotent: the database upserts on supplier + external ID, and an unchanged payload checksum is a no-op.
+  Offers missing from a complete refresh are marked unavailable rather than deleted.
+- Parallel importers take a transaction-level advisory lock on the title match key, so they never create duplicate
+  master products. Wrongly split products can be merged; the old record keeps a pointer to the survivor.
+- Category tree (cycles refused), supplier-genre → category mapping, media, versioned content (one current version
+  per locale), import jobs (one active full import per supplier), AI jobs, publishing queue, storefronts,
+  storefront product mappings and sync logs.
+- Migration `0002` replaces the Phase 1 placeholder tables. It refuses to run if any of them hold data.
+
+## Phase 1
 
 - Sign-in with Argon2 passwords, 15-minute access tokens and rotating refresh tokens in HTTP-only cookies.
   Re-using a rotated refresh token signs out that whole session family.
@@ -79,11 +95,15 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `GET /roles` | Roles and permission matrix |
 | `GET /dashboard/summary` · `GET /dashboard/activity` | Dashboard |
 | `GET /audit-logs` | Audit trail with filters and cursor paging |
+| `GET /catalogue/products` | Search (title, developer, publisher, SKU, supplier ID) and filters: type, status, platform, region, supplier, category, availability |
+| `GET/PATCH /catalogue/products/{id}` | Product detail with variants, offers, supplier records, media, categories; edit facts |
+| `POST /catalogue/products/{id}/merge` · `PUT /catalogue/products/{id}/categories` | Merge duplicates, set categories |
+| `GET /catalogue/supplier-products/{id}` | Original supplier data, including the raw payload |
+| `GET/POST /catalogue/categories` · `PATCH/DELETE /catalogue/categories/{id}` | Category tree |
+| `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 
 ## Next phases
 
-2. Kinguin connection and resumable catalogue import into OMGGamer OS.
-3. Catalogue editor, categories and attributes, pricing rules.
-4. AI Studio (OpenAI by default, provider-switchable), prompt versions, cost tracking.
-5. WordPress connector plugin and WooCommerce sync with omggamer.com.
-6. Orders and Kinguin fulfilment. 7. Analytics and automation.
+Phase 3 is the Kinguin connection and a resumable catalogue import into this schema. Later phases follow the
+OMGGamer OS master specification: catalogue editor and pricing, AI Studio, WooCommerce sync with omggamer.com,
+orders and fulfilment, analytics and automation.

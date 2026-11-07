@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.core.redis import BEAT_HEARTBEAT_KEY, WORKER_HEARTBEAT_KEY, get_redis
-from app.db.models import Channel, ChannelListing, Product, Supplier, SupplierProduct
+from app.db.models import Product, Storefront, StorefrontProductMapping, Supplier, SupplierProduct
 from app.db.session import get_sessionmaker
 from tests.conftest import MakeUser, login
 
@@ -19,15 +19,25 @@ async def test_dashboard_counts_come_from_the_database(client: AsyncClient, make
 
     async with get_sessionmaker()() as db:
         kinguin = (await db.execute(select(Supplier).where(Supplier.code == "kinguin"))).scalar_one()
-        channel = (await db.execute(select(Channel).where(Channel.code == "omggamer-staging"))).scalar_one()
-        p1 = Product(slug="a", title="Game A", status="draft")
-        p2 = Product(slug="b", title="Game B", status="published")
+        channel = (
+            await db.execute(select(Storefront).where(Storefront.code == "omggamer-staging"))
+        ).scalar_one()
+        p1 = Product(slug="a", canonical_title="Game A", match_key="game a", product_status="draft")
+        p2 = Product(slug="b", canonical_title="Game B", match_key="game b", product_status="published")
         db.add_all(
-            [p1, p2, SupplierProduct(supplier_id=kinguin.id, external_id="230507", name="Star Wars Outlaws")]
+            [
+                p1,
+                p2,
+                SupplierProduct(
+                    supplier_id=kinguin.id, external_product_id="230507", original_title="Star Wars Outlaws"
+                ),
+            ]
         )
         await db.flush()
         db.add(
-            ChannelListing(channel_id=channel.id, product_id=p2.id, external_id=2362, sync_status="synced")
+            StorefrontProductMapping(
+                storefront_id=channel.id, product_id=p2.id, external_product_id="2362", sync_status="synced"
+            )
         )
         await db.commit()
 
@@ -53,7 +63,7 @@ async def test_health_reports_each_dependency(client: AsyncClient, make_user: Ma
     names = {c["name"]: c for c in h["checks"]}
     assert names["Database"]["ok"] and names["Redis"]["ok"]
     assert names["Background workers"]["ok"] is False  # no worker running in tests
-    assert h["ok"] is False and h["migration"] == "0001"
+    assert h["ok"] is False and h["migration"] == "0002"
 
     await get_redis().set(WORKER_HEARTBEAT_KEY, str(time.time()))
     await get_redis().set(BEAT_HEARTBEAT_KEY, str(time.time()))
