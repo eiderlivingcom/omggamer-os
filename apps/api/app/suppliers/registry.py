@@ -1,6 +1,7 @@
 """Build the adapter for a supplier from its stored (encrypted) connection."""
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -38,15 +39,20 @@ def decrypt_credentials(conn: SupplierConnection | None) -> dict[str, Any]:
     return dict(json.loads(decrypt_secret(conn.credentials_enc)))
 
 
+# Adapter factory per supplier code: (configuration, environment, credentials) -> adapter.
+# Adding a supplier = writing its adapter (see SupplierAdapterBase) and registering it here.
+ADAPTERS: dict[str, Callable[[dict[str, Any], str, dict[str, Any]], SupplierAdapter]] = {
+    "kinguin": lambda cfg, env, creds: KinguinAdapter.build(
+        cfg, env, str(creds.get("api_key") or ""), transport_override
+    ),
+}
+
+
 def build_adapter(supplier: Supplier, environment: str, credentials: dict[str, Any]) -> SupplierAdapter:
-    if supplier.code == "kinguin":
-        return KinguinAdapter.build(
-            supplier.configuration or {},
-            environment,
-            str(credentials.get("api_key") or ""),
-            transport_override,
-        )
-    raise SupplierAuthError(f"No adapter is available for supplier '{supplier.code}' yet.")
+    factory = ADAPTERS.get(supplier.code)
+    if factory is None:
+        raise SupplierAuthError(f"No adapter is available for supplier '{supplier.code}' yet.")
+    return factory(supplier.configuration or {}, environment, credentials)
 
 
 async def adapter_for(

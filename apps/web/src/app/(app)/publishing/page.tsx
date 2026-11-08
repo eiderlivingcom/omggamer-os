@@ -170,6 +170,7 @@ export default function PublishingPage() {
               <button className="mt-1 text-xs font-semibold underline" onClick={() => setSecret(null)}>Done</button>
             </Notice>
           )}
+          {can("credentials:manage") && <AddStorefront onAdded={load} />}
           {ov?.storefronts.map((s) => (
             <Card
               key={s.storefront}
@@ -206,5 +207,38 @@ export default function PublishingPage() {
         </div>
       )}
     </>
+  );
+}
+
+function AddStorefront({ onAdded }: { onAdded: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ name: "", code: "", domain: "", currency: "EUR" });
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!open) return <button className="text-sm font-semibold text-brand-700 underline" onClick={() => setOpen(true)}>Add another storefront</button>;
+  const input = "mt-1 h-9 w-full rounded-md border border-ink-200 px-2 text-sm font-normal";
+  return (
+    <Card title="Add a storefront">
+      <form
+        className="grid gap-3 sm:grid-cols-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            await api("/storefronts", { method: "POST", json: f });
+            setOpen(false);
+            await onAdded();
+          } catch (err) {
+            setMsg(err instanceof ApiError ? err.message : "Could not add the storefront.");
+          }
+        }}
+      >
+        <label className="text-xs font-semibold text-ink-700">Name<input required className={input} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+        <label className="text-xs font-semibold text-ink-700">Code<input required className={input} placeholder="omggamer-eu" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></label>
+        <label className="text-xs font-semibold text-ink-700">Domain<input required className={input} placeholder="eu.omggamer.com" value={f.domain} onChange={(e) => setF({ ...f, domain: e.target.value })} /></label>
+        <label className="text-xs font-semibold text-ink-700">Currency<input required maxLength={3} className={input} value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value.toUpperCase() })} /></label>
+        <div className="flex gap-2 sm:col-span-4"><Button type="submit">Add storefront</Button><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button></div>
+        {msg && <p className="text-sm text-rose-700 sm:col-span-4">{msg}</p>}
+        <p className="text-xs text-ink-500 sm:col-span-4">WooCommerce stores connect through the OMGGamer Catalogue Connector plugin. Install it on the store, then generate the secret here.</p>
+      </form>
+    </Card>
   );
 }

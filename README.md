@@ -11,6 +11,29 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
+## Phase 10: analytics, automation and multi-supplier support
+
+- Analytics (`/analytics/summary`, Analytics page), computed live for 7, 30, 90 or 365 days:
+  - Catalogue: master products, variants, offers, products by supplier, category and status.
+  - AI: completion and cost. Publishing: success rate and sync failures. Stock: availability.
+  - Suppliers: import and purchase performance.
+  - Sales: orders, revenue, supplier cost, gross margin, fulfilment rate and time, daily orders.
+- Automation (Automation page; `automation.tick` every 5 minutes):
+  - Scheduled tasks: a weekly full import and a daily AI batch.
+  - Automatic approval of AI content that had no review flags, optionally per product type.
+    Publishing stays manual.
+  - Hourly automatic retry of failed AI and publishing jobs (orders always wait for a person).
+  - Error alerts to a Slack, Discord or other webhook, each event sent once.
+  - Price and stock schedules come from Phase 8.
+- Multi-supplier: `SupplierAdapterBase` gives the common interface (`authenticate`, `fetch_products`,
+  `fetch_product_details`, `fetch_offers`, `normalize_product`, `normalize_offer`, `check_availability`,
+  `purchase_offer`). Kinguin is the first adapter. A new supplier is one adapter class plus one entry in
+  `app/suppliers/registry.py: ADAPTERS`; it can be added with `POST /suppliers`, and stays disabled until its
+  adapter exists. The catalogue, pricing, publishing and order code do not change.
+- Multi-storefront: storefronts are records with a platform (`woocommerce` via the connector plugin). Add one
+  with `POST /storefronts` or Publishing → Storefronts. Pricing rules, currencies, publishing and orders all
+  work per storefront.
+
 ## Phase 9: order management and fulfilment
 
 - When a WooCommerce order is paid, the connector plugin (1.2.0) sends its OMGGamer items to
@@ -235,6 +258,9 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `POST /webhooks/storefronts/{code}/orders` | Paid orders from the store (signed) |
 | `GET /orders` · `/orders/overview` · `/orders/{id}` · `PUT /orders/settings` | Orders |
 | `POST /orders/{id}/retry` · `/resend-keys` · `/resolve` · `/cancel` · `/refund` | Manual intervention |
+| `GET /analytics/summary` | Analytics |
+| `GET/PUT /automation/settings` · `POST /automation/test-notification` | Automation rules and alerts |
+| `GET /suppliers/adapters` · `POST /suppliers` · `GET /storefronts/platforms` · `POST /storefronts` | Add suppliers and stores |
 | `GET /connector/plugin.zip` | The WordPress connector plugin (public, no secrets) |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 | `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
@@ -243,6 +269,5 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 
 ## Next phases
 
-Phase 10 is analytics, automation and multi-supplier support. Later phases follow the OMGGamer OS master specification:
-AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
-fulfilment, analytics and automation.
+All ten phases of the master specification are built. Before going live on omggamer.com, see the
+go-live checklist in the final report: production keys, staging tests, then switching the live storefront on.

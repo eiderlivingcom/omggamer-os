@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.ai.router import router as ai_router
+from app.analytics.router import router as analytics_router
+from app.automation.router import router as automation_router
 from app.catalogue.router import router as catalogue_router
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
@@ -100,6 +102,8 @@ def create_app() -> FastAPI:
         publishing_router,
         sync_router,
         orders_router,
+        analytics_router,
+        automation_router,
     ):
         api.include_router(r)
     app.include_router(api)

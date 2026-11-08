@@ -26,6 +26,8 @@ from app.ai.openai_client import (
     AiRequestError,
     OpenAIClient,
 )
+from app.automation.service import get_settings as automation_settings
+from app.automation.service import should_auto_approve
 from app.catalogue.repositories import ContentRepository
 from app.catalogue.services import CatalogueService
 from app.core.config import get_settings
@@ -178,7 +180,7 @@ class AiRunner:
 
         missing = clean.pop("missing_information")
         flags_all = flags + [f"missing: {m}" for m in missing]
-        await ContentRepository(db).add_version(
+        version = await ContentRepository(db).add_version(
             product.id,
             locale,
             {
@@ -201,7 +203,13 @@ class AiRunner:
                 "ai_job_id": job.id,
             },
         )
-        if product.product_status == "draft":
+        auto = should_auto_approve(await automation_settings(db), product.product_type, flags_all)
+        if auto:
+            # Automation rule: clean AI content (no review flags) is approved; publishing stays manual.
+            version.content_status = "approved"
+            if product.product_status in ("draft", "review"):
+                product.product_status = "approved"
+        elif product.product_status == "draft":
             product.product_status = "review"
         if clean["suggested_category"]:
             # Recorded as an AI suggestion (source "ai"); manual categories are never replaced.

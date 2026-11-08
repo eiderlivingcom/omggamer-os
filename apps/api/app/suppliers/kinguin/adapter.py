@@ -6,12 +6,12 @@ from typing import Any
 import httpx
 
 from app.catalogue.schemas import NormalizedProduct
-from app.suppliers.base import Page
+from app.suppliers.base import Page, SupplierAdapterBase
 from app.suppliers.kinguin import normalizer
 from app.suppliers.kinguin.client import LIVE_BASE, MAX_PAGE_SIZE, SANDBOX_BASE, KinguinClient
 
 
-class KinguinAdapter:
+class KinguinAdapter(SupplierAdapterBase):
     code = "kinguin"
     max_page_size = MAX_PAGE_SIZE
 

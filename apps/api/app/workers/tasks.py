@@ -547,3 +547,103 @@ def orders_watchdog() -> int:
     for oid in ids:
         orders_fulfil.apply_async((str(oid),), queue="default")
     return len(ids)
+
+
+# ------------------------------------------------------------------ Phase 10: automation
+
+
+async def _automation_tick() -> list[str]:
+    from sqlalchemy import insert, literal
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.ai.router import _eligible
+    from app.automation import service as automation
+    from app.db.models import AiJob, ImportJob, Product, PublishingQueueItem, Supplier
+    from app.db.models.jobs import ACTIVE_JOB_STATUSES
+    from app.suppliers import registry
+
+    engine = _session_engine()
+    done: list[str] = []
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            due = await automation.due_jobs(db)
+            await db.commit()
+            s = await automation.get_settings(db)
+            if "full_import" in due:
+                supplier = (
+                    await db.execute(select(Supplier).where(Supplier.code == "kinguin"))
+                ).scalar_one_or_none()
+                busy = supplier is None or await db.scalar(
+                    select(ImportJob.id)
+                    .where(ImportJob.supplier_id == supplier.id, ImportJob.status.in_(ACTIVE_JOB_STATUSES))
+                    .limit(1)
+                )
+                if supplier is not None and not busy:
+                    job = ImportJob(
+                        supplier_id=supplier.id,
+                        job_type="full",
+                        status="queued",
+                        params={"scheduled": True, "environment": registry.active_environment(supplier)},
+                    )
+                    db.add(job)
+                    await db.commit()
+                    run_import.apply_async((str(job.id),), queue="imports")
+                    done.append("full_import")
+            if "ai_daily" in due:
+                ids_q = _eligible().order_by(Product.updated_at.desc()).limit(int(s["ai_daily"]["limit"]))
+                res = await db.execute(
+                    insert(AiJob)
+                    .from_select(
+                        ["product_id", "task", "status"],
+                        select(ids_q.subquery().c.id, literal("content"), literal("queued")),
+                    )
+                    .returning(AiJob.id)
+                )
+                ids = list(res.scalars())
+                await db.commit()
+                for jid in ids:
+                    ai_generate.apply_async((str(jid),), queue="ai")
+                done.append(f"ai_daily:{len(ids)}")
+            if "auto_retry" in due:
+                limit = int(s["auto_retry"]["max"])
+                ai_ids = list(
+                    (
+                        await db.execute(
+                            update(AiJob)
+                            .where(AiJob.status == "failed", AiJob.attempts < limit * 3)
+                            .values(status="queued")
+                            .returning(AiJob.id)
+                        )
+                    ).scalars()
+                )
+                pub_ids = list(
+                    (
+                        await db.execute(
+                            update(PublishingQueueItem)
+                            .where(
+                                PublishingQueueItem.status == "failed",
+                                PublishingQueueItem.attempts < limit * 5,
+                            )
+                            .values(status="queued")
+                            .returning(PublishingQueueItem.id)
+                        )
+                    ).scalars()
+                )
+                await db.commit()
+                for jid in ai_ids:
+                    ai_generate.apply_async((str(jid),), queue="ai")
+                for pid in pub_ids:
+                    publish_run.apply_async((str(pid),), queue="publish")
+                done.append(f"auto_retry:{len(ai_ids)}+{len(pub_ids)}")
+            if "notify" in due:
+                n = await automation.send_alerts(db)
+                await db.commit()
+                done.append(f"notify:{n}")
+    finally:
+        await engine.dispose()
+    return done
+
+
+@celery_app.task(name="automation.tick")  # type: ignore[misc]
+def automation_tick() -> list[str]:
+    return asyncio.run(_automation_tick())

@@ -75,3 +75,47 @@ class SupplierAdapter(Protocol):
     async def return_keys(self, order_id: str) -> list[dict[str, Any]]: ...
 
     async def aclose(self) -> None: ...
+
+
+class SupplierAdapterBase:
+    """Common supplier interface (master specification, Phase 10). A new supplier is one subclass plus one
+    entry in app.suppliers.registry.ADAPTERS; the catalogue, pricing, publishing and order code never change.
+
+    Subclasses implement the low-level methods (test_connection, fetch_page, fetch_one, external_id,
+    normalize, purchase, find_order, order_status, download_keys, return_keys, aclose). The methods named in
+    the specification are provided on top of them.
+    """
+
+    code: str = ""
+    max_page_size: int = 100
+
+    # --- specification names -------------------------------------------------------------------
+    async def authenticate(self) -> dict[str, Any]:
+        return await self.test_connection()  # type: ignore[attr-defined, no-any-return]
+
+    async def fetch_products(self, page: int, page_size: int, updated_since: datetime | None = None) -> Page:
+        return await self.fetch_page(page, page_size, updated_since)  # type: ignore[attr-defined, no-any-return]
+
+    async def fetch_product_details(self, external_id: str) -> dict[str, Any]:
+        return await self.fetch_one(external_id)  # type: ignore[attr-defined, no-any-return]
+
+    async def fetch_offers(self, external_id: str) -> list[Any]:
+        return list(self.normalize_product(await self.fetch_product_details(external_id)).offers)
+
+    def normalize_product(self, record: dict[str, Any]) -> NormalizedProduct:
+        return self.normalize(record)  # type: ignore[attr-defined, no-any-return]
+
+    def normalize_offer(self, record: dict[str, Any], offer_id: str) -> Any:
+        return next(
+            (o for o in self.normalize_product(record).offers if o.external_offer_id == offer_id), None
+        )
+
+    async def check_availability(self, external_id: str, quantity: int = 1) -> bool:
+        try:
+            offers = await self.fetch_offers(external_id)
+        except SupplierNotFound:
+            return False
+        return any(o.availability in ("in_stock", "preorder") and o.quantity >= quantity for o in offers)
+
+    async def purchase_offer(self, lines: list[dict[str, Any]], reference: str) -> dict[str, Any]:
+        return await self.purchase(lines, reference)  # type: ignore[attr-defined, no-any-return]
