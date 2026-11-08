@@ -124,7 +124,7 @@ class BulkService:
         return await self._queue_ai(p, "content")
 
     async def _regenerate_ai(self, p: Product, body: BulkIn) -> str:
-        return await self._queue_ai(p, "content")
+        return await self._queue_ai(p, "regenerate")
 
     async def _assign_categories(self, p: Product, body: BulkIn) -> str:
         if not body.category_ids:

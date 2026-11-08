@@ -88,6 +88,61 @@ function ConnectionRow({ c, active, onSaved }: { c: Connection; active: boolean;
   );
 }
 
+type AiCred = { configured: boolean; status: string; last_checked_at: string | null; last_error: string | null };
+
+function OpenAiCard() {
+  const [cred, setCred] = useState<AiCred | null>(null);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
+  const load = useCallback(() => api<AiCred>("/ai/credentials").then(setCred).catch(() => undefined), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api("/ai/credentials", { method: "PUT", json: { api_key: key } });
+      setKey("");
+      const t = await api<{ ok: boolean; message: string }>("/ai/credentials/test", { method: "POST" });
+      setMsg({ tone: t.ok ? "ok" : "bad", text: t.ok ? `Saved. ${t.message}` : `Saved, but the test failed: ${t.message}` });
+      await load();
+    } catch (err) {
+      setMsg({ tone: "bad", text: err instanceof ApiError ? err.message : "Could not save the key." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const s = STATUS[cred?.status ?? "not_configured"] ?? NOT_SET;
+  return (
+    <Card title="OpenAI" aside={<Pill tone={s.tone}>{s.label}</Pill>}>
+      {cred?.last_error && cred.status === "failed" && <p className="mb-3 text-xs text-rose-700">{cred.last_error}</p>}
+      <form onSubmit={save} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <Field
+            label={cred?.configured ? "Replace API key" : "API key"}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={cred?.configured ? "•••••••• stored — enter a new key to replace it" : "sk-…"}
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            minLength={20}
+            required
+          />
+        </div>
+        <Button type="submit" disabled={busy || key.length < 20}>{busy ? "Saving…" : "Save and test"}</Button>
+      </form>
+      {msg && <div className="mt-3"><Notice tone={msg.tone}>{msg.text}</Notice></div>}
+      <p className="mt-3 text-xs text-ink-500">Used by AI Studio. Model, limits and costs are set in AI Studio → Settings.</p>
+    </Card>
+  );
+}
+
 export default function CredentialsPage() {
   const { can } = useSession();
   const [data, setData] = useState<SupplierConnections | null>(null);
@@ -118,6 +173,7 @@ export default function CredentialsPage() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 space-y-6">
       <Card
         title="Kinguin eCommerce API"
         aside={
@@ -147,6 +203,8 @@ export default function CredentialsPage() {
           </div>
         )}
       </Card>
+      <OpenAiCard />
+      </div>
       <Card title="How keys are stored">
         <ul className="list-disc space-y-2 pl-4 text-sm text-ink-700">
           <li>Keys are encrypted in the database and only decrypted inside the server when an import runs.</li>
@@ -154,7 +212,7 @@ export default function CredentialsPage() {
           <li>Production and sandbox keys are different; get them from Kinguin → Dashboard → My Stores.</li>
           <li>Every change is written to the audit log (without the key).</li>
         </ul>
-        <p className="mt-4 text-xs text-ink-500">OpenAI (Phase 5) and the WooCommerce connector (Phase 7) are added here in their phases.</p>
+        <p className="mt-4 text-xs text-ink-500">The WooCommerce connector key is set per storefront under Publishing.</p>
       </Card>
     </div>
   );

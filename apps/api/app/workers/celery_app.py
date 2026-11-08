@@ -38,6 +38,7 @@ celery_app.conf.update(
     timezone="UTC",
     beat_schedule={
         "imports-watchdog": {"task": "imports.watchdog", "schedule": 120.0},
+        "ai-watchdog": {"task": "ai.watchdog", "schedule": 180.0},
     },
 )
 

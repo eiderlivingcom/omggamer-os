@@ -6,15 +6,17 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from app.core.logging import log
+from app.db.models.settings import AppSetting as AppSettingValue
 from app.workers.celery_app import ReliableTask, celery_app, settings, sync_engine
 
 if TYPE_CHECKING:
+    from app.ai.runner import AiOutcome
     from app.imports.runner import Outcome
 
 STALE_AFTER = timedelta(minutes=10)
@@ -75,3 +77,58 @@ def import_watchdog() -> int:
     if requeued:
         log.warning("import_watchdog_requeued", jobs=requeued)
     return requeued
+
+
+async def _run_ai(job_id: str) -> "AiOutcome":
+    from app.ai.runner import AiRunner
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        return await AiRunner(engine).run(uuid.UUID(job_id))
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="ai.generate")  # type: ignore[misc]
+def ai_generate(job_id: str) -> str:
+    """Generate content for one AI job. Retries and pauses re-schedule the same job."""
+    outcome = asyncio.run(_run_ai(job_id))
+    if outcome.state == "retry_later":
+        ai_generate.apply_async((job_id,), queue="ai", countdown=outcome.delay)
+    return str(outcome.state)
+
+
+@celery_app.task(base=ReliableTask, name="ai.watchdog")  # type: ignore[misc]
+def ai_watchdog() -> int:
+    """Re-queue AI jobs a dead worker left behind: queued > 5 min or running > 15 min without an update."""
+    from app.db.models import AiJob
+
+    now = datetime.now(UTC)
+    with Session(sync_engine()) as s:
+        paused = (
+            s.execute(select(AppSettingValue.value).where(AppSettingValue.key == "ai")).scalar_one_or_none()
+            or {}
+        )
+        if paused.get("paused"):
+            return 0
+        ids = list(
+            s.execute(
+                select(AiJob.id)
+                .where(
+                    ((AiJob.status == "queued") & (AiJob.updated_at < now - timedelta(minutes=5)))
+                    | ((AiJob.status == "running") & (AiJob.updated_at < now - timedelta(minutes=15)))
+                )
+                .limit(500)
+            ).scalars()
+        )
+        if ids:
+            s.execute(
+                update(AiJob).where(AiJob.id.in_(ids), AiJob.status == "running").values(status="queued")
+            )
+            s.execute(update(AiJob).where(AiJob.id.in_(ids)).values(updated_at=now))
+            s.commit()
+    for job_id in ids:
+        ai_generate.apply_async((str(job_id),), queue="ai")
+    if ids:
+        log.warning("ai_watchdog_requeued", jobs=len(ids))
+    return len(ids)

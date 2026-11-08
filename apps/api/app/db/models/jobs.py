@@ -123,6 +123,10 @@ class AiJob(UUIDPk, Timestamps, Base):
     estimated_cost: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal("0"))
     error_message: Mapped[str | None] = mapped_column(Text)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # generated | flagged | skipped_unchanged | skipped_no_data
+    outcome: Mapped[str | None] = mapped_column(String(30))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
 
 class PublishingQueueItem(UUIDPk, Timestamps, Base):

@@ -11,6 +11,23 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
+## Phase 5: AI content engine
+
+- OpenAI Chat Completions with Structured Outputs (strict JSON schema): SEO title, short and long description,
+  meta title and description, tags, suggested category and image alt text. Structured product information
+  (platforms, editions, regions, languages, developer...) always comes from supplier facts, never the model.
+- The prompt gets supplier facts and the original description, never prices. Answers are checked against the
+  facts: platforms, editions, regions, languages, system requirements or developer details the supplier did not
+  provide are flagged for review, unknown categories are dropped and SEO length limits are checked.
+- Results are saved as a new content version with status "pending_review". The supplier's original data is
+  never changed. A product whose facts have not changed is skipped (price changes never trigger
+  regeneration); "Regenerate" forces a new version.
+- Jobs run in the `ai` Celery queue with a Redis limit on parallel requests, retries with backoff,
+  pause and resume, and a watchdog. Auth, quota and bad-request errors stop the job with a clear message.
+- AI Studio: start generation, pause and resume, retry failed, AI log, costs (tokens, cost per product,
+  failed requests), settings (model, temperature, max tokens, batch size, concurrency, retries, language,
+  brand voice, SEO rules, prices) and versioned prompt templates. The OpenAI key is under API credentials.
+
 ## Phase 4: product management interface
 
 - Catalogue list with server-side search (title, Kinguin ID, product ID, SKU, developer, publisher), pagination
@@ -132,6 +149,8 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `GET/POST /catalogue/categories` · `PATCH/DELETE /catalogue/categories/{id}` | Category tree |
 | `POST /catalogue/products/bulk` | Bulk AI, categories, approve, reject, publish, archive, retry |
 | `GET /catalogue/products/{id}/content` · `/publishing` · `/activity` | Content versions, publishing history, activity log |
+| `GET /ai/overview` · `PUT /ai/settings` · `GET/PUT /ai/credentials` · `GET/POST /ai/prompts` | AI Studio setup |
+| `POST /ai/generate` · `/ai/pause` · `/ai/resume` · `/ai/jobs/retry-failed` · `GET /ai/jobs` · `/ai/costs` | AI generation |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 | `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
 | `GET /imports/overview` · `GET/POST /imports` · `GET /imports/{id}` | Import dashboard, start an import |
@@ -139,6 +158,6 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 
 ## Next phases
 
-Phase 5 is the AI content engine. Later phases follow the OMGGamer OS master specification:
+Phase 6 is categories, attributes and pricing. Later phases follow the OMGGamer OS master specification:
 AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
 fulfilment, analytics and automation.

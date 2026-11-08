@@ -23,14 +23,18 @@ from app.db.models.jobs import (
     PublishingQueueItem,
     WebhookInbox,
 )
+from app.db.models.settings import AiPrompt, AppSetting, IntegrationCredential
 
 __all__ = [
     "AiJob",
+    "AiPrompt",
+    "AppSetting",
     "AuditLog",
     "DeadLetter",
     "ImportFailure",
     "ImportJob",
     "ImportLog",
+    "IntegrationCredential",
     "Permission",
     "Product",
     "ProductCategory",
