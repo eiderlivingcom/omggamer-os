@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       OMGGamer Catalogue Connector
  * Description:       Secure receiving endpoint for approved product data from OMGGamer OS. Creates and updates WooCommerce products by their OMGGamer OS ID, never duplicates them and never touches orders.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            OMGGamer
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OMG_CONNECTOR_VERSION', '1.0.0');
+define('OMG_CONNECTOR_VERSION', '1.1.0');
 define('OMG_CONNECTOR_FILE', __FILE__);
 define('OMG_CONNECTOR_NS', 'omggamer-connector/v1');
 
@@ -23,6 +23,7 @@ require_once __DIR__ . '/includes/class-auth.php';
 require_once __DIR__ . '/includes/class-products.php';
 require_once __DIR__ . '/includes/class-rest.php';
 require_once __DIR__ . '/includes/class-admin.php';
+require_once __DIR__ . '/includes/class-checkout.php';
 
 add_action('before_woocommerce_init', function () {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
@@ -33,6 +34,7 @@ add_action('before_woocommerce_init', function () {
 add_action('rest_api_init', ['OMG_Connector_REST', 'register']);
 add_action('admin_menu', ['OMG_Connector_Admin', 'menu']);
 add_action('admin_init', ['OMG_Connector_Admin', 'register_settings']);
+add_action('init', ['OMG_Connector_Checkout', 'init']);
 
 register_activation_hook(__FILE__, function () {
     if (!get_option('omg_connector_secret')) {

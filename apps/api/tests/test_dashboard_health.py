@@ -63,7 +63,7 @@ async def test_health_reports_each_dependency(client: AsyncClient, make_user: Ma
     names = {c["name"]: c for c in h["checks"]}
     assert names["Database"]["ok"] and names["Redis"]["ok"]
     assert names["Background workers"]["ok"] is False  # no worker running in tests
-    assert h["ok"] is False and h["migration"] == "0007"
+    assert h["ok"] is False and h["migration"] == "0008"
 
     await get_redis().set(WORKER_HEARTBEAT_KEY, str(time.time()))
     await get_redis().set(BEAT_HEARTBEAT_KEY, str(time.time()))

@@ -22,6 +22,9 @@ class OMG_Connector_Admin
             },
         ]);
         register_setting('omg_connector', 'omg_connector_vendor_id', ['type' => 'integer', 'sanitize_callback' => 'absint']);
+        register_setting('omg_connector', 'omg_connector_os_url', ['type' => 'string', 'sanitize_callback' => 'esc_url_raw', 'default' => 'https://os.omggamer.com']);
+        register_setting('omg_connector', 'omg_connector_storefront', ['type' => 'string', 'sanitize_callback' => 'sanitize_key']);
+        register_setting('omg_connector', 'omg_connector_strict', ['type' => 'integer', 'sanitize_callback' => 'absint']);
     }
 
     public static function page()
@@ -49,6 +52,15 @@ class OMG_Connector_Admin
                         <td>
                             <input type="number" min="0" id="omg_connector_vendor_id" name="omg_connector_vendor_id" value="<?php echo esc_attr((string) get_option('omg_connector_vendor_id', 0)); ?>">
                             <p class="description">Owner of products created by the connector (the Dokan store). 0 = first administrator.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Checkout stock check</th>
+                        <td>
+                            <p><label>OMGGamer OS URL <input type="url" class="regular-text" name="omg_connector_os_url" value="<?php echo esc_attr((string) get_option('omg_connector_os_url', 'https://os.omggamer.com')); ?>"></label></p>
+                            <p><label>Storefront code <input type="text" name="omg_connector_storefront" value="<?php echo esc_attr((string) get_option('omg_connector_storefront', '')); ?>" placeholder="omggamer-staging"></label></p>
+                            <p><label><input type="checkbox" name="omg_connector_strict" value="1" <?php checked((int) get_option('omg_connector_strict', 0), 1); ?>> Block checkout when OMGGamer OS cannot be reached</label></p>
+                            <p class="description">With a storefront code set, checkout confirms with OMGGamer OS that each item still has a purchasable supplier offer. Leave the code empty to switch the check off.</p>
                         </td>
                     </tr>
                 </table>

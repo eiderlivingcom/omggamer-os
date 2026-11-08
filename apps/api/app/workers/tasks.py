@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
@@ -16,6 +16,8 @@ from app.db.models.settings import AppSetting as AppSettingValue
 from app.workers.celery_app import ReliableTask, celery_app, settings, sync_engine
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncEngine
+
     from app.ai.runner import AiOutcome
     from app.imports.runner import Outcome
     from app.publishing.runner import PublishOutcome
@@ -51,6 +53,8 @@ def run_import(job_id: str) -> str:
         run_import.apply_async((job_id,), queue="imports", countdown=outcome.delay)
     if outcome.follow_up_job_id:
         run_import.apply_async((str(outcome.follow_up_job_id),), queue="imports", countdown=5)
+    if outcome.state == "done":
+        celery_app.send_task("sync.push", queue="publish", countdown=10)  # new supplier prices → storefronts
     log.info("import_chunk", job_id=job_id, state=outcome.state)
     return str(outcome.state)
 
@@ -271,3 +275,193 @@ def publish_watchdog() -> int:
     for item_id in ids:
         publish_run.apply_async((str(item_id),), queue="publish")
     return len(ids)
+
+
+# ------------------------------------------------------------------ Phase 8: price, stock and offer sync
+
+
+def _session_engine() -> "AsyncEngine":
+    return create_async_engine(settings.database_url, poolclass=NullPool)
+
+
+async def _sync_push(full: bool) -> dict[str, int]:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.models import Storefront
+    from app.sync import service
+
+    engine = _session_engine()
+    totals: dict[str, int] = {}
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            st = await service.get_settings(db)
+            since_raw = st.get("last_push_at")
+            since = datetime.fromisoformat(since_raw) - timedelta(minutes=2) if since_raw else None
+            started = datetime.now(UTC)
+            for sf in list(
+                (await db.execute(select(Storefront).where(Storefront.status == "active"))).scalars()
+            ):
+                stats = await service.push_prices(db, sf, since=since, full=full or since is None)
+                for k, v in stats.items():
+                    totals[k] = totals.get(k, 0) + v
+            await service.save_settings(db, {"last_push_at": started.isoformat()})
+            await db.commit()
+    finally:
+        await engine.dispose()
+    return totals
+
+
+@celery_app.task(base=ReliableTask, name="sync.push", time_limit=60 * 60, soft_time_limit=55 * 60)  # type: ignore[misc]
+def sync_push(full: bool = False) -> dict[str, int]:
+    """Push changed selling prices and stock to every active storefront."""
+    import redis as redis_sync
+
+    lock = redis_sync.Redis.from_url(settings.redis_url).lock("omgos:sync:push", timeout=3600, blocking=False)
+    if not lock.acquire(blocking=False):
+        return {"skipped": 1}
+    try:
+        return asyncio.run(_sync_push(full))
+    finally:
+        try:
+            lock.release()
+        except Exception:  # the lock already expired
+            log.warning("sync_push_lock_release_failed")
+
+
+async def _sync_run() -> str:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.models import ImportJob, Supplier
+    from app.db.models.jobs import ACTIVE_JOB_STATUSES
+    from app.suppliers import registry
+
+    engine = _session_engine()
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            supplier = (
+                await db.execute(select(Supplier).where(Supplier.code == "kinguin"))
+            ).scalar_one_or_none()
+            if supplier is None or supplier.status != "active":
+                return "no supplier"
+            if await db.scalar(
+                select(ImportJob.id)
+                .where(ImportJob.supplier_id == supplier.id, ImportJob.status.in_(ACTIVE_JOB_STATUSES))
+                .limit(1)
+            ):
+                return "import running"
+            last = await db.scalar(
+                select(func.max(ImportJob.started_at)).where(
+                    ImportJob.supplier_id == supplier.id,
+                    ImportJob.status == "completed",
+                    ImportJob.job_type.in_(("full", "incremental")),
+                    ImportJob.params["max_records"].astext.is_(None),
+                )
+            )
+            if last is None:
+                return "no full import yet"
+            job = ImportJob(
+                supplier_id=supplier.id,
+                job_type="incremental",
+                status="queued",
+                params={
+                    "updated_since": (last - timedelta(minutes=5)).isoformat(),
+                    "scheduled": True,
+                    "environment": registry.active_environment(supplier),
+                },
+            )
+            db.add(job)
+            await db.commit()
+            run_import.apply_async((str(job.id),), queue="imports")
+            return "queued"
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="sync.run")  # type: ignore[misc]
+def sync_run() -> str:
+    """Scheduled offer refresh: an update import from Kinguin; prices are pushed when it completes."""
+    return asyncio.run(_sync_run())
+
+
+async def _sync_tick() -> str:
+    from celery.schedules import crontab
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.sync import service
+
+    engine = _session_engine()
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            st = await service.get_settings(db)
+            if not st["enabled"]:
+                return "disabled"
+            now = datetime.now(UTC).replace(second=0, microsecond=0)
+            last_raw = st.get("last_run_at")
+            last = datetime.fromisoformat(last_raw) if last_raw else None
+            if st.get("cron"):
+                due = (
+                    crontab(*st["cron"].split()).is_due(last or now - timedelta(days=1))[0] if last else True
+                )
+            else:
+                due = last is None or now - last >= timedelta(minutes=int(st["interval_minutes"]))
+            full = (
+                now.hour == int(st["full_check_hour"])
+                and (st.get("last_full_at") or "")[:10] != now.date().isoformat()
+            )
+            if not due and not full:
+                return "not due"
+            changes: dict[str, str] = {}
+            if due:
+                changes["last_run_at"] = now.isoformat()
+            if full:
+                changes["last_full_at"] = now.isoformat()
+            await service.save_settings(db, changes)
+            await db.commit()
+    finally:
+        await engine.dispose()
+    if due:
+        sync_run.apply_async(queue="default")
+    if full:
+        sync_push.apply_async(kwargs={"full": True}, queue="publish")
+    return "started"
+
+
+@celery_app.task(name="sync.tick")  # type: ignore[misc]
+def sync_tick() -> str:
+    return asyncio.run(_sync_tick())
+
+
+async def _refresh(inbox_id: str) -> str:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.models import Supplier, WebhookInbox
+    from app.sync import service
+
+    engine = _session_engine()
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            row = await db.get(WebhookInbox, uuid.UUID(inbox_id))
+            if row is None or row.state == "processed":
+                return "done"
+            row.attempts += 1
+            supplier = (await db.execute(select(Supplier).where(Supplier.code == row.source))).scalar_one()
+            ext = str(row.payload.get("kinguinId") or "")
+            try:
+                await service.refresh_product(db, supplier, ext)
+            except Exception as exc:
+                row.state, row.last_error = "failed", str(exc)[:2000]
+                await db.commit()
+                raise
+            row.state, row.processed_at, row.last_error = "processed", datetime.now(UTC), None
+            await db.commit()
+            return "processed"
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="sync.refresh_product")  # type: ignore[misc]
+def sync_refresh_product(inbox_id: str) -> str:
+    """Kinguin product.update webhook: refresh that product's offers, then push changed prices."""
+    out = asyncio.run(_refresh(inbox_id))
+    sync_push.apply_async(queue="publish", countdown=30)
+    return out

@@ -41,6 +41,8 @@ celery_app.conf.update(
         "imports-watchdog": {"task": "imports.watchdog", "schedule": 120.0},
         "ai-watchdog": {"task": "ai.watchdog", "schedule": 180.0},
         "publish-watchdog": {"task": "publish.watchdog", "schedule": 180.0},
+        # Checks the configurable price/stock schedule every minute (Automation → Price synchronisation).
+        "sync-tick": {"task": "sync.tick", "schedule": 60.0},
         # ECB publishes around 16:00 CET on working days.
         "currency-rates": {"task": "pricing.refresh_rates", "schedule": crontab(minute=30, hour=15)},
         "category-rules": {"task": "catalogue.apply_category_rules", "schedule": crontab(minute=15, hour=3)},

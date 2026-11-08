@@ -33,6 +33,7 @@ from app.db.models import (
 from app.db.models.pricing import VariantPrice
 from app.pricing.engine import PricingEngine
 from app.publishing.connector import ConnectorClient, ConnectorError
+from app.sync.service import mark_pushed
 
 MAX_ATTEMPTS = 5
 
@@ -286,6 +287,7 @@ class Publisher:
             await db.execute(
                 stmt.on_conflict_do_update(index_elements=["storefront_id", "product_id"], set_=values)
             )
+            await mark_pushed(db, sf_id, [uuid.UUID(v["variant_id"]) for v in payload["variants"]])
             product.product_status = "published"
             item.status = "completed"
             item.last_error = None

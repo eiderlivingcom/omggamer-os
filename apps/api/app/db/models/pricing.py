@@ -93,6 +93,10 @@ class VariantPrice(Base):
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # What the storefront currently shows, as last confirmed by the connector (price/stock sync).
+    pushed_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    pushed_in_stock: Mapped[bool | None] = mapped_column(Boolean)
+    pushed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PriceHistory(Base):
