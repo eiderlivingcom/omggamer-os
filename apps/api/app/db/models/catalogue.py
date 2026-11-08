@@ -319,6 +319,10 @@ class StorefrontProductMapping(UUIDPk, Timestamps, Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_hash: Mapped[str | None] = mapped_column(String(64))
     last_error: Mapped[str | None] = mapped_column(Text)
+    # OMGGamer variant ID → storefront product/variation ID, as returned by the connector
+    variant_map: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
 
 
 class SyncLog(UUIDPk, Base):

@@ -11,6 +11,27 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
+## Phase 7: WooCommerce synchronisation
+
+- WordPress plugin **OMGGamer Catalogue Connector** (`apps/api/wp-connector`, also served at
+  `/api/v1/connector/plugin.zip`). It is the secure receiving endpoint on the store:
+  - HMAC-SHA256 signed requests with a 5-minute replay window, plus idempotency keys.
+  - A per-product database lock, and lookup by `_omg_external_id`, so products are never duplicated.
+  - Simple or variable products (variations per platform/edition/region, mapped by `_omg_variant_id`).
+  - Images downloaded once each, categories created by path, tags, attributes (using the store's `pa_*`
+    attributes when they exist), and Yoast / Rank Math SEO fields.
+  - New products are owned by the configured Dokan vendor.
+  - It never deletes products, never touches orders, and writes only the fields OMGGamer OS owns.
+- OMGGamer OS publisher (`publish` queue):
+  - Only approved products with approved content are sent, using stored selling prices that are
+    recalculated just before sending. Products without a price are refused.
+  - An unchanged payload is not sent again. Temporary errors retry with backoff (5 attempts); a bad
+    signature or rejected data fails immediately.
+  - Every attempt goes to `sync_logs`, the WooCommerce IDs go to `storefront_product_mappings`, and a
+    watchdog re-queues stalled items.
+- Publishing page: queue (retry and cancel), sync log, and per-storefront connector setup (generate the
+  secret, test the connection, switch publishing on or off). Unpublish sets the store product to draft.
+
 ## Phase 6: categories, attributes and pricing
 
 - Category tree management (configurable, cycle-safe) and category rules: supplier genre, platform, product type
@@ -169,6 +190,10 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `GET/PUT /pricing/currencies` · `POST /pricing/currencies/refresh` · `PUT /pricing/storefronts/{code}` | Currencies |
 | `GET /pricing/products/{id}` · `POST /pricing/recalculate` · `GET /pricing/history` | Prices and history |
 | `GET /catalogue/attributes` · `GET/POST/DELETE /catalogue/category-rules` · `POST …/apply` | Attributes, category rules |
+| `GET/PUT /storefronts/{code}/connector` · `POST …/connector/secret` · `POST …/connector/test` | Store connector |
+| `GET /publishing/overview` · `/publishing/queue` · `/publishing/sync-logs` | Publishing status |
+| `POST /publishing/queue/{id}/retry` · `/cancel` · `/publishing/retry-failed` · `/publishing/unpublish` | Publishing control |
+| `GET /connector/plugin.zip` | The WordPress connector plugin (public, no secrets) |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 | `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
 | `GET /imports/overview` · `GET/POST /imports` · `GET /imports/{id}` | Import dashboard, start an import |
@@ -176,6 +201,6 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 
 ## Next phases
 
-Phase 7 is WooCommerce synchronisation. Later phases follow the OMGGamer OS master specification:
+Phase 8 is price, stock and offer synchronisation. Later phases follow the OMGGamer OS master specification:
 AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
 fulfilment, analytics and automation.

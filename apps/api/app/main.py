@@ -23,6 +23,7 @@ from app.modules.roles.router import router as roles_router
 from app.modules.system.router import router as system_router
 from app.modules.users.router import router as users_router
 from app.pricing.router import router as pricing_router
+from app.publishing.router import router as publishing_router
 
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -94,6 +95,7 @@ def create_app() -> FastAPI:
         imports_router,
         ai_router,
         pricing_router,
+        publishing_router,
     ):
         api.include_router(r)
     app.include_router(api)

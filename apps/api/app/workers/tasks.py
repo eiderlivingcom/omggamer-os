@@ -18,6 +18,7 @@ from app.workers.celery_app import ReliableTask, celery_app, settings, sync_engi
 if TYPE_CHECKING:
     from app.ai.runner import AiOutcome
     from app.imports.runner import Outcome
+    from app.publishing.runner import PublishOutcome
 
 STALE_AFTER = timedelta(minutes=10)
 QUEUED_GRACE = timedelta(minutes=2)
@@ -217,3 +218,56 @@ async def _apply_category_rules() -> int:
 @celery_app.task(base=ReliableTask, name="catalogue.apply_category_rules")  # type: ignore[misc]
 def apply_category_rules() -> int:
     return asyncio.run(_apply_category_rules())
+
+
+async def _publish(item_id: str) -> "PublishOutcome":
+    from app.publishing.runner import Publisher
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        return await Publisher(engine).run(uuid.UUID(item_id))
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="publish.run")  # type: ignore[misc]
+def publish_run(item_id: str) -> str:
+    outcome = asyncio.run(_publish(item_id))
+    if outcome.state == "retry_later":
+        publish_run.apply_async((item_id,), queue="publish", countdown=outcome.delay)
+    return str(outcome.state)
+
+
+@celery_app.task(base=ReliableTask, name="publish.watchdog")  # type: ignore[misc]
+def publish_watchdog() -> int:
+    """Re-queue publishing items left queued > 5 min or running > 15 min (a worker died)."""
+    from app.db.models import PublishingQueueItem
+
+    now = datetime.now(UTC)
+    with Session(sync_engine()) as s:
+        ids = list(
+            s.execute(
+                select(PublishingQueueItem.id)
+                .where(
+                    (
+                        (PublishingQueueItem.status == "queued")
+                        & (PublishingQueueItem.updated_at < now - timedelta(minutes=5))
+                    )
+                    | (
+                        (PublishingQueueItem.status == "running")
+                        & (PublishingQueueItem.updated_at < now - timedelta(minutes=15))
+                    )
+                )
+                .limit(500)
+            ).scalars()
+        )
+        if ids:
+            s.execute(
+                update(PublishingQueueItem)
+                .where(PublishingQueueItem.id.in_(ids))
+                .values(status="queued", updated_at=now)
+            )
+            s.commit()
+    for item_id in ids:
+        publish_run.apply_async((str(item_id),), queue="publish")
+    return len(ids)

@@ -1,7 +1,7 @@
 // Main navigation. `phase` is when a section becomes functional; pages show that honestly instead of sample data.
 
 /** The highest phase that is deployed. Sections up to it are live. */
-export const CURRENT_PHASE = 6;
+export const CURRENT_PHASE = 7;
 
 export type NavSection = { label: string; phase: number };
 export type NavItem = { href: string; label: string; icon: string; perm: string; sections: NavSection[] };

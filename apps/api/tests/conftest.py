@@ -92,6 +92,9 @@ async def clean() -> AsyncIterator[None]:
         await db.execute(
             text("DELETE FROM storefronts WHERE code NOT IN ('omggamer-live', 'omggamer-staging')")
         )
+        await db.execute(
+            text("UPDATE storefronts SET credentials_enc = NULL, status = 'disabled', configuration = '{}'")
+        )
         await db.commit()
     await get_redis().flushdb()
     yield
