@@ -130,8 +130,53 @@ class ProductRepository:
         category_id: uuid.UUID | None,
         availability: str | None,
         include_merged: bool,
+        edition: str | None = None,
+        ai_status: str | None = None,
+        publishing: str | None = None,
     ) -> Select[tuple[Product]]:
         stmt = select(Product)
+        if edition:
+            stmt = stmt.where(
+                exists().where(
+                    ProductVariant.product_id == Product.id,
+                    func.lower(ProductVariant.edition) == edition.lower(),
+                )
+            )
+        if ai_status:
+            current = exists().where(
+                ProductContent.product_id == Product.id,
+                ProductContent.locale == "en",
+                ProductContent.is_current.is_(True),
+            )
+            if ai_status == "none":
+                stmt = stmt.where(~current)
+            else:
+                stmt = stmt.where(
+                    exists().where(
+                        ProductContent.product_id == Product.id,
+                        ProductContent.locale == "en",
+                        ProductContent.is_current.is_(True),
+                        ProductContent.content_status == ai_status,
+                    )
+                )
+        if publishing:
+            mapped = exists().where(StorefrontProductMapping.product_id == Product.id)
+            if publishing == "not_published":
+                stmt = stmt.where(
+                    ~exists().where(
+                        StorefrontProductMapping.product_id == Product.id,
+                        StorefrontProductMapping.sync_status.in_(("synced", "pending", "failed")),
+                    )
+                )
+            else:
+                status_for = {"published": "synced", "pending": "pending", "failed": "failed"}
+                stmt = stmt.where(
+                    mapped,
+                    exists().where(
+                        StorefrontProductMapping.product_id == Product.id,
+                        StorefrontProductMapping.sync_status == status_for.get(publishing, publishing),
+                    ),
+                )
         if not include_merged:
             stmt = stmt.where(Product.product_status != "merged")
         if product_type:
@@ -224,6 +269,10 @@ class ProductRepository:
                 "lowest_price_currency": None,
                 "cover_url": None,
                 "content_status": None,
+                "external_ids": [],
+                "categories": [],
+                "editions": [],
+                "publishing_status": "not_published",
             }
             for i in ids
         }
@@ -235,14 +284,51 @@ class ProductRepository:
                 func.count(),
                 func.array_remove(func.array_agg(func.distinct(ProductVariant.platform)), None),
                 func.array_remove(func.array_agg(func.distinct(ProductVariant.region)), None),
+                func.array_remove(func.array_agg(func.distinct(ProductVariant.edition)), None),
             )
             .where(ProductVariant.product_id.in_(ids))
             .group_by(ProductVariant.product_id)
         )
-        for pid, n, platforms, regions in v.tuples().all():
+        for pid, n, platforms, regions, editions in v.tuples().all():
             out[pid].update(
-                variant_count=int(n), platforms=sorted(platforms or []), regions=sorted(regions or [])
+                variant_count=int(n),
+                platforms=sorted(platforms or []),
+                regions=sorted(regions or []),
+                editions=sorted(editions or []),
             )
+        ext = await self.db.execute(
+            select(SupplierProduct.product_id, SupplierProduct.external_product_id)
+            .where(SupplierProduct.product_id.in_(ids))
+            .order_by(SupplierProduct.product_id, SupplierProduct.external_product_id)
+        )
+        for pid, eid in ext.tuples().all():
+            out[pid]["external_ids"].append(eid)
+        cats = await self.db.execute(
+            select(ProductCategoryMapping.product_id, ProductCategory.name)
+            .join(ProductCategory, ProductCategory.id == ProductCategoryMapping.category_id)
+            .where(ProductCategoryMapping.product_id.in_(ids))
+            .order_by(ProductCategoryMapping.product_id, ProductCategory.name)
+        )
+        for pid, name in cats.tuples().all():
+            out[pid]["categories"].append(name)
+        pubs = await self.db.execute(
+            select(StorefrontProductMapping.product_id, StorefrontProductMapping.sync_status).where(
+                StorefrontProductMapping.product_id.in_(ids)
+            )
+        )
+        rank = {"failed": 4, "synced": 3, "pending": 2, "unpublished": 1}
+        label = {
+            "failed": "failed",
+            "synced": "published",
+            "pending": "pending",
+            "unpublished": "unpublished",
+        }
+        best: dict[uuid.UUID, str] = {}
+        for pid, st in pubs.tuples().all():
+            if rank.get(st, 0) > rank.get(best.get(pid, ""), 0):
+                best[pid] = st
+        for pid, st in best.items():
+            out[pid]["publishing_status"] = label.get(st, st)
         o = await self.db.execute(
             select(
                 SupplierProduct.product_id,

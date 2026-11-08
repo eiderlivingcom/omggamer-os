@@ -6,13 +6,19 @@ from typing import Literal
 from fastapi import APIRouter, Query, Request, Response
 from sqlalchemy import select
 
+from app.ai import queue as ai_queue
+from app.catalogue.bulk import BulkService
 from app.catalogue.repositories import StorefrontRepository, SupplierRepository
 from app.catalogue.schemas import (
+    ActivityOut,
+    BulkIn,
+    BulkResult,
     CategoryIn,
     CategoryNode,
     CategoryRef,
     CategoryUpdateIn,
     ContentOut,
+    ContentVersionOut,
     MediaOut,
     MergeIn,
     OfferOut,
@@ -22,6 +28,9 @@ from app.catalogue.schemas import (
     ProductPage,
     ProductType,
     ProductUpdateIn,
+    PublishingEvent,
+    PublishingHistory,
+    PublishingMappingOut,
     StorefrontOut,
     SupplierOut,
     SupplierProductDetail,
@@ -31,8 +40,20 @@ from app.catalogue.schemas import (
 from app.catalogue.services import CatalogueService
 from app.core.deps import DB, CurrentUser, require
 from app.core.errors import AppError
-from app.db.models import Product, Supplier, SupplierProduct, User
+from app.db.models import (
+    AuditLog,
+    Product,
+    ProductContent,
+    PublishingQueueItem,
+    Storefront,
+    StorefrontProductMapping,
+    Supplier,
+    SupplierProduct,
+    SyncLog,
+    User,
+)
 from app.modules.audit.service import record
+from app.publishing import queue as publish_queue
 
 router = APIRouter(tags=["catalogue"])
 
@@ -60,6 +81,9 @@ async def list_products(
     supplier: str | None = Query(default=None, max_length=40),
     category_id: uuid.UUID | None = None,
     availability: Literal["available", "unavailable"] | None = None,
+    edition: str | None = Query(default=None, max_length=120),
+    ai_status: Literal["none", "draft", "pending_review", "approved", "rejected"] | None = None,
+    publishing: Literal["not_published", "pending", "published", "failed", "unpublished"] | None = None,
     include_merged: bool = False,
     page: int = Query(default=1, ge=1, le=100000),
     page_size: int = Query(default=50, ge=1, le=200),
@@ -75,6 +99,9 @@ async def list_products(
         category_id=category_id,
         availability=availability,
         include_merged=include_merged,
+        edition=edition,
+        ai_status=ai_status,
+        publishing=publishing,
     )
     rows, total = await svc.products.page(stmt, page, page_size)
     agg = await svc.products.list_summaries([p.id for p in rows])
@@ -417,3 +444,127 @@ async def list_storefronts(db: DB, _: User = require("catalogue:read")) -> list[
         item.mapped_products = n
         out.append(item)
     return out
+
+
+# ------------------------------------------------------------ Phase 4: bulk, history, activity
+
+
+@router.post("/catalogue/products/bulk", response_model=BulkResult)
+async def bulk(body: BulkIn, request: Request, db: DB, actor: CurrentUser) -> BulkResult:
+    svc = BulkService(db, actor)
+    result = await svc.run(body)
+    await record(
+        db,
+        f"product.bulk.{body.action}",
+        actor=actor,
+        entity_type="product",
+        summary=f"Bulk {body.action.replace('_', ' ')}: {result.changed} of {result.requested} products",
+        data={"product_ids": [str(i) for i in body.product_ids[:50]], **result.details},
+        request=request,
+    )
+    for pid in body.product_ids[:200] if result.changed else []:
+        await record(
+            db,
+            f"product.{body.action}",
+            actor=actor,
+            entity_type="product",
+            entity_id=str(pid),
+            summary=f"{body.action.replace('_', ' ').capitalize()} (bulk)",
+            request=request,
+        )
+    await db.commit()
+    ai_queue.enqueue(svc.ai_job_ids)
+    publish_queue.enqueue(svc.publish_ids)
+    return result
+
+
+@router.get("/catalogue/products/{product_id}/content", response_model=list[ContentVersionOut])
+async def content_versions(
+    product_id: uuid.UUID, db: DB, _: User = require("catalogue:read")
+) -> list[ProductContent]:
+    await _product(db, product_id)
+    q = (
+        select(ProductContent)
+        .where(ProductContent.product_id == product_id)
+        .order_by(ProductContent.locale, ProductContent.version.desc())
+        .limit(50)
+    )
+    return list((await db.execute(q)).scalars())
+
+
+@router.get("/catalogue/products/{product_id}/publishing", response_model=PublishingHistory)
+async def publishing_history(
+    product_id: uuid.UUID, db: DB, _: User = require("catalogue:read")
+) -> PublishingHistory:
+    await _product(db, product_id)
+    maps = await db.execute(
+        select(StorefrontProductMapping, Storefront.code)
+        .join(Storefront, Storefront.id == StorefrontProductMapping.storefront_id)
+        .where(StorefrontProductMapping.product_id == product_id)
+    )
+    queue = await db.execute(
+        select(PublishingQueueItem, Storefront.code)
+        .outerjoin(Storefront, Storefront.id == PublishingQueueItem.storefront_id)
+        .where(PublishingQueueItem.product_id == product_id)
+        .order_by(PublishingQueueItem.created_at.desc())
+        .limit(50)
+    )
+    logs = await db.execute(
+        select(SyncLog, Storefront.code)
+        .join(Storefront, Storefront.id == SyncLog.storefront_id)
+        .where(SyncLog.product_id == product_id)
+        .order_by(SyncLog.created_at.desc())
+        .limit(100)
+    )
+    events = [
+        PublishingEvent(
+            kind="queue",
+            storefront=code,
+            action=q.action,
+            status=q.status,
+            detail=q.last_error,
+            created_at=q.created_at,
+        )
+        for q, code in queue.tuples().all()
+    ] + [
+        PublishingEvent(
+            kind="sync",
+            storefront=code,
+            action=s.operation,
+            status=s.status,
+            detail=str(s.response.get("message") or s.response.get("error") or "") or None,
+            created_at=s.created_at,
+        )
+        for s, code in logs.tuples().all()
+    ]
+    events.sort(key=lambda e: e.created_at, reverse=True)
+    return PublishingHistory(
+        mappings=[
+            PublishingMappingOut(
+                storefront=code,
+                external_product_id=m.external_product_id,
+                sync_status=m.sync_status,
+                last_synced_at=m.last_synced_at,
+                last_error=m.last_error,
+            )
+            for m, code in maps.tuples().all()
+        ],
+        events=events,
+    )
+
+
+@router.get("/catalogue/products/{product_id}/activity", response_model=list[ActivityOut])
+async def activity(
+    product_id: uuid.UUID,
+    db: DB,
+    limit: int = Query(default=100, ge=1, le=500),
+    _: User = require("catalogue:read"),
+) -> list[AuditLog]:
+    await _product(db, product_id)
+    q = (
+        select(AuditLog)
+        .where(AuditLog.entity_type == "product", AuditLog.entity_id == str(product_id))
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
+    return list((await db.execute(q)).scalars())

@@ -189,6 +189,10 @@ class ProductListItem(BaseModel):
     lowest_price: Decimal | None
     lowest_price_currency: str | None
     content_status: str | None
+    external_ids: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    editions: list[str] = Field(default_factory=list)
+    publishing_status: str = "not_published"
     updated_at: datetime
 
 
@@ -286,3 +290,71 @@ class StorefrontOut(ORM):
 
 
 assert set(PRODUCT_STATUSES) >= {"draft", "review", "archived"}
+
+
+# ------------------------------------------------------------
+# Phase 4: bulk operations, history and activity
+# ------------------------------------------------------------
+
+BulkAction = Literal[
+    "generate_ai",
+    "regenerate_ai",
+    "assign_categories",
+    "approve",
+    "reject",
+    "publish",
+    "archive",
+    "retry_failed",
+]
+
+
+class BulkIn(BaseModel):
+    action: BulkAction
+    product_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    category_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    storefront: str | None = Field(default=None, max_length=40)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class BulkResult(BaseModel):
+    action: str
+    requested: int
+    changed: int
+    skipped: int
+    details: dict[str, int] = Field(default_factory=dict)
+
+
+class ContentVersionOut(ContentOut):
+    is_current: bool
+    created_at: datetime
+
+
+class PublishingEvent(BaseModel):
+    kind: Literal["queue", "sync"]
+    storefront: str | None
+    action: str
+    status: str
+    detail: str | None
+    created_at: datetime
+
+
+class PublishingMappingOut(BaseModel):
+    storefront: str
+    external_product_id: str | None
+    sync_status: str
+    last_synced_at: datetime | None
+    last_error: str | None
+
+
+class PublishingHistory(BaseModel):
+    mappings: list[PublishingMappingOut]
+    events: list[PublishingEvent]
+
+
+class ActivityOut(ORM):
+    id: uuid.UUID
+    created_at: datetime
+    actor_email: str | None
+    action: str
+    summary: str
+    data: dict[str, Any]

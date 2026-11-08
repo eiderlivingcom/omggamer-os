@@ -129,3 +129,114 @@ export type ImportOverview = {
 
 export type ImportLog = { id: number; level: "info" | "warning" | "error"; message: string; data: Record<string, unknown>; created_at: string };
 export type ImportFailure = { id: string; external_product_id: string; error: string; attempts: number; created_at: string };
+
+export type ProductListItem = {
+  id: string;
+  canonical_title: string;
+  slug: string;
+  product_type: string;
+  product_status: string;
+  developer: string | null;
+  publisher: string | null;
+  cover_url: string | null;
+  platforms: string[];
+  regions: string[];
+  suppliers: string[];
+  variant_count: number;
+  offer_count: number;
+  lowest_price: string | null;
+  lowest_price_currency: string | null;
+  content_status: string | null;
+  external_ids: string[];
+  categories: string[];
+  editions: string[];
+  publishing_status: string;
+  updated_at: string;
+};
+export type ProductPage = { items: ProductListItem[]; total: number; page: number; page_size: number };
+
+export type Variant = {
+  id: string;
+  sku: string;
+  platform: string | null;
+  edition: string | null;
+  region: string | null;
+  activation_type: string | null;
+  language: string | null;
+  offer_count: number;
+  lowest_price: string | null;
+  lowest_price_currency: string | null;
+};
+export type Offer = {
+  id: string;
+  supplier_product_id: string;
+  variant_id: string | null;
+  external_offer_id: string;
+  seller_id: string | null;
+  region: string | null;
+  currency: string;
+  supplier_price: string;
+  available_quantity: number;
+  availability_status: string;
+  last_synced_at: string | null;
+};
+export type SupplierProductRef = {
+  id: string;
+  supplier_code: string;
+  external_product_id: string;
+  external_product_set_id: string | null;
+  original_title: string;
+  variant_id: string | null;
+  import_status: string;
+  last_fetched_at: string | null;
+};
+export type Content = {
+  id: string;
+  locale: string;
+  version: number;
+  origin: string;
+  title: string | null;
+  short_description: string | null;
+  long_description: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  image_alt_text: Record<string, string>;
+  tags: string[];
+  content_status: string;
+  model: string | null;
+  prompt_version: string | null;
+  generated_at: string | null;
+  is_current?: boolean;
+  created_at?: string;
+  [k: string]: unknown;
+};
+export type ProductDetail = {
+  id: string;
+  master_product_id: string | null;
+  canonical_title: string;
+  slug: string;
+  match_key: string;
+  product_type: string;
+  product_status: string;
+  brand: string | null;
+  developer: string | null;
+  publisher: string | null;
+  release_date: string | null;
+  created_at: string;
+  updated_at: string;
+  variants: Variant[];
+  offers: Offer[];
+  supplier_products: SupplierProductRef[];
+  categories: { id: string; name: string; slug: string; source: string; confidence: string | null }[];
+  media: { id: string; source_url: string; storage_url: string | null; media_type: string; position: number; processing_status: string }[];
+  content: Content | null;
+  merged_from: string[];
+};
+export type SupplierProductDetail = SupplierProductRef & { original_description: string | null; raw_payload: Record<string, unknown> };
+export type CategoryNode = { id: string; name: string; slug: string; parent_id: string | null; position: number; product_count: number; children: CategoryNode[] };
+export type BulkResult = { action: string; requested: number; changed: number; skipped: number; details: Record<string, number> };
+export type PublishingHistory = {
+  mappings: { storefront: string; external_product_id: string | null; sync_status: string; last_synced_at: string | null; last_error: string | null }[];
+  events: { kind: "queue" | "sync"; storefront: string | null; action: string; status: string; detail: string | null; created_at: string }[];
+};
+export type Activity = { id: string; created_at: string; actor_email: string | null; action: string; summary: string; data: Record<string, unknown> };

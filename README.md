@@ -11,7 +11,19 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
-## Phase 3 (this release): Kinguin integration and catalogue import
+## Phase 4: product management interface
+
+- Catalogue list with server-side search (title, Kinguin ID, product ID, SKU, developer, publisher), pagination
+  (up to 200 per page) and filters for supplier, category, platform, region, edition, type, availability,
+  AI status, approval and publishing. Columns: image, title, Kinguin ID, category, platform and region,
+  supplier, offers, lowest available supplier price, AI, approval and publishing status, last updated.
+- Bulk operations: generate or regenerate AI content, assign categories, approve, reject, publish, archive and
+  retry failed jobs. Each action checks the user's role, and skipped products are reported with a reason.
+- Product detail with ten sections: overview, original supplier data (including the raw payload), variants,
+  offers, AI content (side by side with the original, plus version history), categories and attributes,
+  media, SEO preview, publishing history and activity log.
+
+## Phase 3: Kinguin integration and catalogue import
 
 - Separate Kinguin adapter (`app/suppliers/kinguin`): API client, normaliser, and a contract the import runner
   uses for every supplier. Endpoints, page size (100) and auth (`X-Api-Key`) follow the official Kinguin docs.
@@ -118,6 +130,8 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `POST /catalogue/products/{id}/merge` · `PUT /catalogue/products/{id}/categories` | Merge duplicates, set categories |
 | `GET /catalogue/supplier-products/{id}` | Original supplier data, including the raw payload |
 | `GET/POST /catalogue/categories` · `PATCH/DELETE /catalogue/categories/{id}` | Category tree |
+| `POST /catalogue/products/bulk` | Bulk AI, categories, approve, reject, publish, archive, retry |
+| `GET /catalogue/products/{id}/content` · `/publishing` · `/activity` | Content versions, publishing history, activity log |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 | `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
 | `GET /imports/overview` · `GET/POST /imports` · `GET /imports/{id}` | Import dashboard, start an import |
@@ -125,6 +139,6 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 
 ## Next phases
 
-Phase 4 is the product management interface. Later phases follow the OMGGamer OS master specification:
+Phase 5 is the AI content engine. Later phases follow the OMGGamer OS master specification:
 AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
 fulfilment, analytics and automation.

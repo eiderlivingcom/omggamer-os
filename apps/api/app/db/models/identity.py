@@ -84,7 +84,10 @@ class RefreshToken(UUIDPk, Base):
 
 class AuditLog(UUIDPk, Base):
     __tablename__ = "audit_logs"
-    __table_args__ = (Index("ix_audit_logs_created_at_desc", "created_at"),)
+    __table_args__ = (
+        Index("ix_audit_logs_created_at_desc", "created_at"),
+        Index("ix_audit_logs_entity", "entity_type", "entity_id", "created_at"),
+    )
     actor_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

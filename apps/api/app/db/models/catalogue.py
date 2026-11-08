@@ -102,6 +102,7 @@ class Product(UUIDPk, Timestamps, Base):
         CheckConstraint("master_product_id IS NULL OR master_product_id <> id", name="not_own_master"),
         trgm("ix_products_canonical_title_trgm", "canonical_title"),
         Index("ix_products_match_key_type", "match_key", "product_type"),
+        Index("ix_products_updated_at", "updated_at"),
     )
     master_product_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("products.id", ondelete="SET NULL"), index=True
