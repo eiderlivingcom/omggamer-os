@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from app.imports.runner import Outcome
 
 STALE_AFTER = timedelta(minutes=10)
+QUEUED_GRACE = timedelta(minutes=2)
 
 
 @celery_app.task(base=ReliableTask, name="system.ping")  # type: ignore[misc]
@@ -61,7 +62,8 @@ def import_watchdog() -> int:
     with Session(sync_engine()) as s:
         jobs = s.execute(
             select(ImportJob).where(
-                ImportJob.status.in_(("queued", "running")), ImportJob.updated_at < now - STALE_AFTER
+                ((ImportJob.status == "running") & (ImportJob.updated_at < now - STALE_AFTER))
+                | ((ImportJob.status == "queued") & (ImportJob.updated_at < now - QUEUED_GRACE))
             )
         ).scalars()
         for job in jobs:

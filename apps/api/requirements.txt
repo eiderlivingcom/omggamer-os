@@ -13,6 +13,7 @@ PyOTP==2.10.0
 redis==6.4.0
 celery==5.4.0
 kombu==5.7.0
+packaging==26.3  # required by kombu.transport.redis but not declared by kombu 5.7.0
 billiard==4.3.2
 vine==5.1.0
 structlog==24.4.0
