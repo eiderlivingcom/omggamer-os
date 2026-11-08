@@ -11,6 +11,27 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
+## Phase 9: order management and fulfilment
+
+- When a WooCommerce order is paid, the connector plugin (1.2.0) sends its OMGGamer items to
+  `/api/v1/webhooks/storefronts/{code}/orders` (HMAC signed). It retries via WP-Cron if OMGGamer OS is
+  unreachable. Orders are stored once per store order ID.
+- Fulfilment (`orders.fulfil`, one worker per order via an advisory lock):
+  1. Each item's supplier offer is re-read live, and the cheapest offer with enough stock is chosen.
+     An item that would sell below cost is held for a person unless "allow loss" is switched on.
+  2. A `supplier_orders` row with a unique reference is committed *before* the Kinguin purchase
+     (`POST /v1/order`, `orderExternalId` = reference). The request is never resent blindly: an unknown
+     outcome is resolved with `GET /v1/order?orderExternalId=…` first, so nothing is bought twice. Kinguin's
+     limits are respected (max 9 per offer, 10 lines, pre-orders alone).
+  3. Keys come from `GET /v2/order/{id}/keys` (or the `order.status` webhook). They are stored encrypted
+     (Fernet), never logged and never returned by the admin API.
+  4. Keys are delivered to the store order (`/orders/deliver`). The plugin shows them in My Account and the
+     completed-order email, and completes the order.
+- Low Kinguin balance, sold-out offers, loss-making prices and quantity limits put the order in "needs
+  attention" (on hold in WooCommerce, with a note). From the Orders page: retry, resend keys, mark handled,
+  cancel (before purchase) or refund. Refund returns keys at Kinguin where its rules allow (within 24 hours,
+  unclaimed, once per order); the payment itself is refunded in WooCommerce.
+
 ## Phase 8: price, stock and offer synchronisation
 
 - A configurable schedule (Automation page: every 5, 15, 30 or 60 minutes... or a custom cron) runs an
@@ -211,6 +232,9 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `POST /publishing/queue/{id}/retry` · `/cancel` · `/publishing/retry-failed` · `/publishing/unpublish` | Publishing control |
 | `GET /sync/overview` · `PUT /sync/settings` · `POST /sync/run-now` · `POST /sync/push` | Price/stock sync |
 | `POST /webhooks/kinguin` · `POST /webhooks/storefronts/{code}/availability` | Server-to-server webhooks |
+| `POST /webhooks/storefronts/{code}/orders` | Paid orders from the store (signed) |
+| `GET /orders` · `/orders/overview` · `/orders/{id}` · `PUT /orders/settings` | Orders |
+| `POST /orders/{id}/retry` · `/resend-keys` · `/resolve` · `/cancel` · `/refund` | Manual intervention |
 | `GET /connector/plugin.zip` | The WordPress connector plugin (public, no secrets) |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 | `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
@@ -219,6 +243,6 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 
 ## Next phases
 
-Phase 9 is order management and fulfilment. Later phases follow the OMGGamer OS master specification:
+Phase 10 is analytics, automation and multi-supplier support. Later phases follow the OMGGamer OS master specification:
 AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
 fulfilment, analytics and automation.

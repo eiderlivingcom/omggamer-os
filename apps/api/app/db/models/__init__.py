@@ -23,6 +23,7 @@ from app.db.models.jobs import (
     PublishingQueueItem,
     WebhookInbox,
 )
+from app.db.models.orders import DeliveredKey, Order, OrderEvent, OrderItem, SupplierOrder
 from app.db.models.pricing import CategoryMappingRule, CurrencyRate, PriceHistory, PricingRule, VariantPrice
 from app.db.models.settings import AiPrompt, AppSetting, IntegrationCredential
 
@@ -34,10 +35,14 @@ __all__ = [
     "CategoryMappingRule",
     "CurrencyRate",
     "DeadLetter",
+    "DeliveredKey",
     "ImportFailure",
     "ImportJob",
     "ImportLog",
     "IntegrationCredential",
+    "Order",
+    "OrderEvent",
+    "OrderItem",
     "Permission",
     "PriceHistory",
     "PricingRule",
@@ -55,6 +60,7 @@ __all__ = [
     "Supplier",
     "SupplierConnection",
     "SupplierOffer",
+    "SupplierOrder",
     "SupplierProduct",
     "SyncLog",
     "User",

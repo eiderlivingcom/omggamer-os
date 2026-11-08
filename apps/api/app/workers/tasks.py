@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from app.ai.runner import AiOutcome
     from app.imports.runner import Outcome
+    from app.orders.fulfil import FulfilOutcome
     from app.publishing.runner import PublishOutcome
 
 STALE_AFTER = timedelta(minutes=10)
@@ -465,3 +466,84 @@ def sync_refresh_product(inbox_id: str) -> str:
     out = asyncio.run(_refresh(inbox_id))
     sync_push.apply_async(queue="publish", countdown=30)
     return out
+
+
+# ------------------------------------------------------------------ Phase 9: orders and fulfilment
+
+
+async def _fulfil(order_id: str) -> "FulfilOutcome":
+    from app.orders.fulfil import Fulfiller
+
+    engine = _session_engine()
+    try:
+        return await Fulfiller(engine).run(uuid.UUID(order_id))
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="orders.fulfil")  # type: ignore[misc]
+def orders_fulfil(order_id: str) -> str:
+    """Buy, collect keys and deliver for one order; re-schedules itself while waiting for keys."""
+    outcome = asyncio.run(_fulfil(order_id))
+    if outcome.state in ("retry_later", "waiting"):
+        orders_fulfil.apply_async((order_id,), queue="default", countdown=outcome.delay or 120)
+    return str(outcome.state)
+
+
+async def _supplier_status(inbox_id: str) -> str | None:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.models import SupplierOrder, WebhookInbox
+
+    engine = _session_engine()
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            row = await db.get(WebhookInbox, uuid.UUID(inbox_id))
+            if row is None:
+                return None
+            so = (
+                await db.execute(
+                    select(SupplierOrder).where(
+                        SupplierOrder.external_order_id == str(row.payload.get("orderId") or "")
+                    )
+                )
+            ).scalar_one_or_none()
+            row.state, row.processed_at = "processed", datetime.now(UTC)
+            await db.commit()
+            return str(so.order_id) if so else None
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="orders.supplier_status")  # type: ignore[misc]
+def orders_supplier_status(inbox_id: str) -> str:
+    """Kinguin order.status webhook: continue fulfilment of the matching order straight away."""
+    order_id = asyncio.run(_supplier_status(inbox_id))
+    if order_id:
+        orders_fulfil.apply_async((order_id,), queue="default")
+    return order_id or "no matching order"
+
+
+@celery_app.task(base=ReliableTask, name="orders.watchdog")  # type: ignore[misc]
+def orders_watchdog() -> int:
+    """Pick up orders a dead worker left behind (no update for 10 minutes)."""
+    from app.db.models import Order
+
+    now = datetime.now(UTC)
+    with Session(sync_engine()) as s:
+        ids = list(
+            s.execute(
+                select(Order.id)
+                .where(
+                    Order.status.in_(("received", "processing", "awaiting_keys")),
+                    Order.updated_at < now - timedelta(minutes=10),
+                )
+                .limit(200)
+            ).scalars()
+        )
+        if ids:
+            s.execute(update(Order).where(Order.id.in_(ids)).values(updated_at=now))
+            s.commit()
+    for oid in ids:
+        orders_fulfil.apply_async((str(oid),), queue="default")
+    return len(ids)

@@ -59,5 +59,33 @@ class KinguinAdapter:
     def normalize(self, record: dict[str, Any]) -> NormalizedProduct:
         return normalizer.normalize(record)
 
+    # ------------------------------------------------------------------ purchasing
+
+    async def purchase(self, lines: list[dict[str, Any]], reference: str) -> dict[str, Any]:
+        """lines: [{external_product_id, qty, price, offer_id}] → Kinguin order object."""
+        products = []
+        for line in lines:
+            item: dict[str, Any] = {
+                "kinguinId": int(line["external_product_id"]),
+                "qty": int(line["qty"]),
+                "price": float(line["price"]),
+            }
+            if line.get("offer_id"):
+                item["offerId"] = line["offer_id"]
+            products.append(item)
+        return await self.client.place_order(products, reference)
+
+    async def find_order(self, reference: str) -> dict[str, Any] | None:
+        return await self.client.find_order(reference)
+
+    async def order_status(self, order_id: str) -> dict[str, Any]:
+        return await self.client.get_order(order_id)
+
+    async def download_keys(self, order_id: str) -> list[dict[str, Any]]:
+        return await self.client.order_keys(order_id)
+
+    async def return_keys(self, order_id: str) -> list[dict[str, Any]]:
+        return await self.client.return_keys(order_id)
+
     async def aclose(self) -> None:
         await self.client.aclose()

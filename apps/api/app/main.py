@@ -22,6 +22,7 @@ from app.modules.dashboard.router import router as dashboard_router
 from app.modules.roles.router import router as roles_router
 from app.modules.system.router import router as system_router
 from app.modules.users.router import router as users_router
+from app.orders.router import router as orders_router
 from app.pricing.router import router as pricing_router
 from app.publishing.router import router as publishing_router
 from app.sync.router import router as sync_router
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
         pricing_router,
         publishing_router,
         sync_router,
+        orders_router,
     ):
         api.include_router(r)
     app.include_router(api)

@@ -28,6 +28,12 @@ class OMG_Connector_REST
         register_rest_route(OMG_CONNECTOR_NS, '/products/prices', [
             'methods' => 'POST', 'callback' => [__CLASS__, 'prices'], 'permission_callback' => $auth,
         ]);
+        register_rest_route(OMG_CONNECTOR_NS, '/orders/deliver', [
+            'methods' => 'POST', 'callback' => [__CLASS__, 'deliver'], 'permission_callback' => $auth,
+        ]);
+        register_rest_route(OMG_CONNECTOR_NS, '/orders/note', [
+            'methods' => 'POST', 'callback' => [__CLASS__, 'note'], 'permission_callback' => $auth,
+        ]);
         register_rest_route(OMG_CONNECTOR_NS, '/products/(?P<external_id>[A-Za-z0-9-]{1,80})', [
             'methods' => 'GET', 'callback' => [__CLASS__, 'lookup'], 'permission_callback' => $auth,
         ]);
@@ -121,6 +127,36 @@ class OMG_Connector_REST
         }
         return self::run($request, null, function () use ($data) {
             return (new OMG_Connector_Products())->update_prices($data['items']);
+        });
+    }
+
+    public static function deliver(WP_REST_Request $request)
+    {
+        $data = self::body($request);
+        if ($data === null) {
+            return new WP_Error('omg_invalid', 'Body must be a JSON object.', ['status' => 400]);
+        }
+        // Keys are never cached in the idempotency store: replays are handled by de-duplicating serials.
+        $ready = self::ready();
+        if (is_wp_error($ready)) {
+            return $ready;
+        }
+        $lock = OMG_Connector_Auth::lock('order-' . ($data['order_id'] ?? ''));
+        try {
+            return rest_ensure_response(OMG_Connector_Orders::deliver($data));
+        } finally {
+            OMG_Connector_Auth::unlock($lock);
+        }
+    }
+
+    public static function note(WP_REST_Request $request)
+    {
+        $data = self::body($request);
+        if ($data === null) {
+            return new WP_Error('omg_invalid', 'Body must be a JSON object.', ['status' => 400]);
+        }
+        return self::run($request, null, function () use ($data) {
+            return OMG_Connector_Orders::note($data);
         });
     }
 

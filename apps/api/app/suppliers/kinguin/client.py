@@ -41,6 +41,14 @@ MAX_RETRY_AFTER = 300.0
 _sleep = asyncio.sleep
 
 
+def _kind(r: httpx.Response) -> str | None:
+    try:
+        body = r.json()
+    except ValueError:
+        return None
+    return str(body.get("kind")) if isinstance(body, dict) and body.get("kind") else None
+
+
 def _detail(r: httpx.Response) -> str:
     try:
         body = r.json()
@@ -111,19 +119,31 @@ class KinguinClient:
         self._last_request = time.monotonic()
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        return await self._send("GET", path, params=params)
+
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: Any = None,
+        attempts: int | None = None,
+    ) -> Any:
         last = "no response"
-        for attempt in range(self.max_attempts):
+        max_attempts = attempts or self.max_attempts
+        for attempt in range(max_attempts):
             await self._throttle()
             delay: float
             try:
-                r = await self._http.get(path, params=params)
+                r = await self._http.request(method, path, params=params, json=json_body)
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 self.requests += 1
                 last = f"{type(exc).__name__}: {exc}"
                 delay = self._backoff(attempt)
             else:
                 self.requests += 1
-                if r.status_code == 200:
+                if r.status_code in (200, 201):
                     try:
                         return r.json()
                     except ValueError:
@@ -146,14 +166,14 @@ class KinguinClient:
                     raise SupplierRequestError(
                         f"Kinguin rejected the request ({r.status_code}): {_detail(r)}",
                         status=r.status_code,
-                        detail=_detail(r),
+                        detail={"kind": _kind(r), "detail": _detail(r)},
                     )
-            if attempt + 1 < self.max_attempts:
+            if attempt + 1 < max_attempts:
                 log.warning(
                     "kinguin_retry", path=path, attempt=attempt + 1, delay=round(delay, 2), reason=last
                 )
                 await _sleep(delay)
-        raise SupplierTemporaryError(f"Kinguin request failed after {self.max_attempts} attempts: {last}")
+        raise SupplierTemporaryError(f"Kinguin request failed after {max_attempts} attempts: {last}")
 
     async def list_products(
         self,
@@ -190,3 +210,46 @@ class KinguinClient:
         if not isinstance(body, list):
             raise SupplierTemporaryError("Kinguin regions response is not a list", detail=str(body)[:300])
         return body
+
+    # ------------------------------------------------------------------ orders (documented v1/v2 Orders API)
+
+    async def place_order(self, products: list[dict[str, Any]], external_ref: str) -> dict[str, Any]:
+        """POST /v1/order. Sent once: a timeout is reported as temporary and must be resolved with
+        find_order(external_ref) before any new attempt, so the same purchase is never made twice."""
+        body = await self._send(
+            "POST", "/v1/order", json_body={"products": products, "orderExternalId": external_ref}, attempts=1
+        )
+        if not isinstance(body, dict) or not body.get("orderId"):
+            raise SupplierTemporaryError("Kinguin order response has no orderId", detail=str(body)[:300])
+        return body
+
+    async def find_order(self, external_ref: str) -> dict[str, Any] | None:
+        """GET /v1/order?orderExternalId=… — the order placed with this reference, if any."""
+        body = await self.get("/v1/order", {"orderExternalId": external_ref, "limit": 1})
+        results = body.get("results") if isinstance(body, dict) else None
+        return results[0] if isinstance(results, list) and results else None
+
+    async def get_order(self, order_id: str) -> dict[str, Any]:
+        body = await self.get(f"/v1/order/{order_id}")
+        if not isinstance(body, dict):
+            raise SupplierTemporaryError("Kinguin order response is not an object")
+        return body
+
+    async def order_keys(self, order_id: str) -> list[dict[str, Any]]:
+        """GET /v2/order/{orderId}/keys, every page (limit 100)."""
+        keys: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            body = await self.get(f"/v2/order/{order_id}/keys", {"page": page, "limit": 100})
+            if not isinstance(body, list) or not body:
+                break
+            keys.extend(k for k in body if isinstance(k, dict))
+            if len(body) < 100:
+                break
+            page += 1
+        return keys
+
+    async def return_keys(self, order_id: str) -> list[dict[str, Any]]:
+        """POST /v2/order/{orderId}/keys/return — allowed once per order (see Kinguin's Return Keys rules)."""
+        body = await self._send("POST", f"/v2/order/{order_id}/keys/return", attempts=1)
+        return body if isinstance(body, list) else []
