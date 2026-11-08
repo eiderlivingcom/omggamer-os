@@ -11,6 +11,20 @@ OMGGamer OS is the master catalogue; WooCommerce on omggamer.com is the storefro
 | Background work | Celery 5 workers + beat, Redis 7 | `apps/api/app/workers` |
 | Deployment | Docker Compose on XGamer Main (xCloud) | `docker-compose.yml` |
 
+## Phase 6: categories, attributes and pricing
+
+- Category tree management (configurable, cycle-safe) and category rules: supplier genre, platform, product type
+  or tag → category. Rules apply when they are created, nightly and on demand, and never remove existing
+  mappings. The attributes view lists every platform, edition, region, activation method, language, developer,
+  publisher and genre with product counts.
+- Pricing rules per storefront and scope (all products, supplier, platform, category, product) with percentage
+  and fixed markup, minimum margin (percentage or amount), minimum selling price and rounding (always up).
+  The most specific rule wins. Without a matching rule a variant gets no price: nothing is ever sold at cost.
+- Currency conversion uses European Central Bank reference rates (fetched daily at 15:30 UTC). Manual rates
+  override them. Each storefront has its own currency.
+- Calculated selling prices are stored per variant and storefront from the cheapest available offer.
+  Every change is written to price history. Supplier purchase prices are never modified.
+
 ## Phase 5: AI content engine
 
 - OpenAI Chat Completions with Structured Outputs (strict JSON schema): SEO title, short and long description,
@@ -151,6 +165,10 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 | `GET /catalogue/products/{id}/content` · `/publishing` · `/activity` | Content versions, publishing history, activity log |
 | `GET /ai/overview` · `PUT /ai/settings` · `GET/PUT /ai/credentials` · `GET/POST /ai/prompts` | AI Studio setup |
 | `POST /ai/generate` · `/ai/pause` · `/ai/resume` · `/ai/jobs/retry-failed` · `GET /ai/jobs` · `/ai/costs` | AI generation |
+| `GET/POST /pricing/rules` · `PUT/DELETE /pricing/rules/{id}` | Pricing rules |
+| `GET/PUT /pricing/currencies` · `POST /pricing/currencies/refresh` · `PUT /pricing/storefronts/{code}` | Currencies |
+| `GET /pricing/products/{id}` · `POST /pricing/recalculate` · `GET /pricing/history` | Prices and history |
+| `GET /catalogue/attributes` · `GET/POST/DELETE /catalogue/category-rules` · `POST …/apply` | Attributes, category rules |
 | `GET /suppliers` · `GET /storefronts` | Suppliers and storefronts with counts |
 | `GET/PUT /suppliers/{code}/connection` · `POST …/connection/test` · `PUT /suppliers/{code}/environment` | Encrypted API keys, connection test, live/sandbox |
 | `GET /imports/overview` · `GET/POST /imports` · `GET /imports/{id}` | Import dashboard, start an import |
@@ -158,6 +176,6 @@ All routes are under `/api/v1`. State-changing requests must come from the app's
 
 ## Next phases
 
-Phase 6 is categories, attributes and pricing. Later phases follow the OMGGamer OS master specification:
+Phase 7 is WooCommerce synchronisation. Later phases follow the OMGGamer OS master specification:
 AI content, categories and pricing, WooCommerce sync with omggamer.com, price and stock sync, orders and
 fulfilment, analytics and automation.

@@ -281,6 +281,8 @@ export default function ProductPage() {
         </Card>
       )}
 
+      {tab === "offers" && can("pricing:read") && <SellingPrices productId={p.id} canRecalc={can("pricing:manage")} />}
+
       {tab === "ai" && (
         <div className="space-y-6">
           {!c ? (
@@ -533,6 +535,48 @@ function Categories({ p, options, canEdit, onSaved }: { p: ProductDetail; option
         <dl className="divide-y divide-ink-100">
           {attrs.map(([k, v]) => <Row key={k} k={k} v={v.length ? v.join(", ") : null} />)}
         </dl>
+      </Card>
+    </div>
+  );
+}
+
+type PriceRow = { variant_id: string; label: string; storefront: string; currency: string; cost: string | null; cost_currency: string | null; preview_price: string | null; stored_price: string | null; rule: string | null; note: string | null };
+
+function SellingPrices({ productId, canRecalc }: { productId: string; canRecalc: boolean }) {
+  const [rows, setRows] = useState<PriceRow[] | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => api<PriceRow[]>(`/pricing/products/${productId}`).then(setRows).catch(() => setRows([])), [productId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  async function recalc() {
+    const r = await api<{ changed?: number }>("/pricing/recalculate", { method: "POST", json: { product_ids: [productId] } });
+    setMsg(`Prices saved (${r.changed ?? 0} changed).`);
+    await load();
+  }
+  return (
+    <div className="mt-6">
+      <Card title="Selling prices" aside={canRecalc && <Button variant="ghost" className="h-8" onClick={recalc}>Recalculate</Button>}>
+        {msg && <p className="mb-2 text-sm text-emerald-700">{msg}</p>}
+        {!rows ? <div className="h-16 animate-pulse rounded-lg bg-ink-50" /> : rows.length === 0 ? <Empty title="No variants" /> : (
+          <div className="-mx-5 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead><tr className="border-b border-ink-100 text-left text-xs font-semibold uppercase text-ink-500"><th className="px-5 py-2">Variant</th><th className="px-3 py-2">Storefront</th><th className="px-3 py-2 text-right">Cost</th><th className="px-3 py-2 text-right">Calculated</th><th className="px-3 py-2 text-right">Saved</th><th className="px-5 py-2">Rule</th></tr></thead>
+              <tbody className="divide-y divide-ink-100">
+                {rows.map((r) => (
+                  <tr key={`${r.variant_id}${r.storefront}`}>
+                    <td className="px-5 py-2">{r.label}</td>
+                    <td className="px-3 py-2">{r.storefront}</td>
+                    <td className="px-3 py-2 text-right font-mono">{money(r.cost, r.cost_currency)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{r.preview_price ? money(r.preview_price, r.currency) : <span className="text-xs text-ink-500">{r.note}</span>}</td>
+                    <td className="px-3 py-2 text-right font-mono">{money(r.stored_price, r.currency)}</td>
+                    <td className="px-5 py-2 text-ink-600">{r.rule ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

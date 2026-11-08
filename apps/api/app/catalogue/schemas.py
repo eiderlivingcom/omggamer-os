@@ -286,6 +286,7 @@ class StorefrontOut(ORM):
     domain: str
     platform: str
     status: str
+    configuration: dict[str, Any] = Field(default_factory=dict)  # non-secret settings (currency, ...)
     mapped_products: int = 0
 
 
