@@ -76,8 +76,9 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-600/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 left-10 h-80 w-80 rounded-full bg-fuchsia-600/20 blur-3xl" />
         <div className="relative flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-600 text-xs font-extrabold">OMG</span>
-          <span className="text-lg font-bold">OMGGamer OS</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/omggamer-logo.svg" alt="OMGGamer" width={185} height={52} className="h-12 w-auto brightness-0 invert" />
+          <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-ink-200">OS</span>
         </div>
         <div className="relative max-w-md">
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight">One catalogue for every supplier and every storefront.</h1>
@@ -88,7 +89,8 @@ export default function LoginPage() {
       <div className="flex items-center justify-center bg-white px-4 py-12 sm:px-8">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-600 text-xs font-extrabold text-white">OMG</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/omggamer-logo.svg" alt="OMGGamer" width={157} height={44} className="h-11 w-auto" />
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-ink-900">Sign in</h2>
           <p className="mb-6 mt-1 text-sm text-ink-500">Use the account your administrator created for you.</p>

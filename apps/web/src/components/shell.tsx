@@ -42,10 +42,11 @@ export function Shell({ children }: { children: ReactNode }) {
         )}
       >
         <Link href="/" className="flex items-center gap-2.5 px-5 pb-5 pt-6">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-fuchsia-600 text-[10px] font-extrabold text-white">OMG</span>
           <span className="leading-tight">
-            <span className="block text-sm font-bold text-white">OMGGamer OS</span>
-            <span className="block text-[11px] text-ink-300">Catalogue &amp; commerce</span>
+            {/* The logo is black artwork; on the dark sidebar it is shown in white. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/omggamer-logo.svg" alt="OMGGamer" width={142} height={40} className="h-10 w-auto brightness-0 invert" />
+            <span className="mt-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-300">OS · Catalogue &amp; commerce</span>
           </span>
         </Link>
         <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Main">
@@ -93,7 +94,9 @@ export function Shell({ children }: { children: ReactNode }) {
           <button aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-lg p-2 text-ink-700 hover:bg-ink-50">
             <Icon name="menu" />
           </button>
-          <span className="text-sm font-bold text-ink-900">OMGGamer OS</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/omggamer-logo.svg" alt="OMGGamer" width={100} height={28} className="h-7 w-auto" />
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-500">OS</span>
         </header>
         <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{loading ? <div className="h-40 animate-pulse rounded-xl bg-white" /> : children}</main>
       </div>
