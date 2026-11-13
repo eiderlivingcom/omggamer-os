@@ -24,21 +24,32 @@ foreach ($rows as $r) {
         continue;
     }
     $n = 0;
-    $prev = '';
+    $byId = [];
+    foreach ($els as $e) {
+        $byId[$e['id'] ?? ''] = $e;
+    }
     foreach ($els as &$e) {
         $t = $e['settings']['text'] ?? null;
         if (!is_string($t)) {
-            $prev = '';
             continue;
         }
         if (strpos($t, 'Verified seller') !== false) {
             $e['settings']['text'] = str_replace('Verified seller', 'Verified partner', $t);
             $n++;
-        } elseif (trim($t) === 'seller' && trim($prev) === 'Verified') {
-            $e['settings']['text'] = 'partner';
-            $n++;
+            continue;
         }
-        $prev = $t;
+        if (trim($t) !== 'seller') {
+            continue;
+        }
+        // "Verified" + "seller" are two text elements in the same trust badge.
+        $parent = $byId[$e['parent'] ?? ''] ?? null;
+        foreach ((array) ($parent['children'] ?? []) as $sib) {
+            if (trim((string) ($byId[$sib]['settings']['text'] ?? '')) === 'Verified') {
+                $e['settings']['text'] = 'partner';
+                $n++;
+                break;
+            }
+        }
     }
     unset($e);
     if ($n) {
