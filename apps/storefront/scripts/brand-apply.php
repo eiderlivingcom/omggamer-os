@@ -12,7 +12,8 @@ if (!defined('WP_CLI')) {
     return;
 }
 
-$logo = esc_url(content_url('uploads/omg-brand/omggamer-logo.svg'));
+// Root-relative, so it works on http/https and on every site in the network.
+$logo = esc_url(wp_make_link_relative(content_url('uploads/omg-brand/omggamer-logo.svg')));
 $img = static function (string $class) use ($logo): string {
     return '<img src="' . $logo . '" alt="OMGGamer" width="135" height="38" class="' . $class . '" decoding="async">';
 };
@@ -97,8 +98,10 @@ if ((int) get_current_blog_id() === 1) {
             return '<!-- wp:html --><a class="omg-brand-logo" href="' . esc_url($m[1]) . '" aria-label="OMGGamer home">'
                 . $img('omg-brand-img' . ($light ? ' omg-brand-img--light' : '')) . '</a><!-- /wp:html -->';
         }, $post->post_content, -1, $n);
-        if (!$n) {
-            WP_CLI::log("Template part $slug: no text logo found (already done?).");
+        // Earlier runs wrote an absolute http:// URL; make it root-relative.
+        $content = preg_replace('~src="https?://[^"/]+(/wp-content/uploads/omg-brand/)~', 'src="$1', $content, -1, $fixed);
+        if (!$n && !$fixed) {
+            WP_CLI::log("Template part $slug: nothing to change.");
             continue;
         }
         $backup($post->ID, $post->post_content);
