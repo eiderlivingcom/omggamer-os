@@ -16,7 +16,7 @@ global $wpdb;
 $rows = $wpdb->get_results(
     "SELECT m.meta_id, m.post_id, m.meta_key, m.meta_value FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} p ON p.ID = m.post_id
      WHERE p.post_status = 'publish' AND p.post_type <> 'revision' AND m.meta_key LIKE '\\_bricks\\_page\\_%\\_2'
-       AND (m.meta_value LIKE '%Verified seller%' OR m.meta_value LIKE '%omg-pp-trust-b%')"
+       AND (m.meta_value LIKE '%Verified seller%' OR m.meta_value LIKE '%s:6:\"seller\";%')"
 );
 foreach ($rows as $r) {
     $els = maybe_unserialize($r->meta_value);
