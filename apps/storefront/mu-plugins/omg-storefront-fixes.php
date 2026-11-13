@@ -57,6 +57,10 @@ final class OMG_Storefront_Fixes
         if ((is_admin() && !wp_doing_ajax()) || !$cart) {
             return;
         }
+        // The automatic PRO price (omg-pricing.php) takes over when it is switched on.
+        if (class_exists('OMG_Pricing') && (float) OMG_Pricing::settings()['pro'] > 0) {
+            return;
+        }
         $pro_id = self::pro_id();
         $has = false;
         foreach ($cart->get_cart() as $item) {
