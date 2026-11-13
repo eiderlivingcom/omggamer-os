@@ -13,7 +13,8 @@ install -d -o "$U" -g "$G" "$DST/wp-content/mu-plugins" "$DST/wp-content/uploads
 install -m 644 -o "$U" -g "$G" "$SRC"/mu-plugins/*.php "$DST/wp-content/mu-plugins/"
 install -m 644 -o "$U" -g "$G" "$SRC"/brand/* "$DST/wp-content/uploads/omg-brand/"
 install -m 644 -o "$U" -g "$G" "$SRC"/scripts/*.php "$HOME_DIR/omg-scripts/"
-for P in "$SRC"/plugins/*/; do
+for P in "$SRC"/plugins/*/ "$SRC"/../api/wp-connector/*/; do
+  [ -d "$P" ] || continue
   N=$(basename "$P")
   rm -rf "$DST/wp-content/plugins/$N.new" && cp -R "$P" "$DST/wp-content/plugins/$N.new"
   chown -R "$U:$G" "$DST/wp-content/plugins/$N.new" && find "$DST/wp-content/plugins/$N.new" -type f -exec chmod 644 {} + && find "$DST/wp-content/plugins/$N.new" -type d -exec chmod 755 {} +
