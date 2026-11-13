@@ -18,3 +18,7 @@ SELECT operation, left(response::text, 400) AS response, count(*), max(created_a
 SELECT created_at, operation, status, left(response::text, 250) FROM sync_logs ORDER BY created_at DESC LIMIT 8;
 \echo '== app_settings (sync related keys)'
 SELECT key, left(value::text, 300) FROM app_settings WHERE key ILIKE ANY (ARRAY['%sync%','%publish%','%automation%']);
+\echo '== audit: storefront / publishing changes'
+SELECT created_at, actor_email, action, left(summary, 160), left(data::text, 200) FROM audit_logs WHERE entity_type ILIKE '%storefront%' OR action ILIKE '%storefront%' OR action ILIKE '%publish%' ORDER BY created_at DESC LIMIT 15;
+\echo '== failed item product'
+SELECT q.created_at, q.action, p.title FROM publishing_queue q JOIN products p ON p.id = q.product_id WHERE q.status = 'failed';
