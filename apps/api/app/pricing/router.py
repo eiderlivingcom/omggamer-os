@@ -37,6 +37,15 @@ class RuleIn(BaseModel):
     min_price: Decimal | None = Field(default=None, ge=0, le=100000)
     rounding: Literal["none", "cents_99", "cents_49_99", "whole", "nearest_05"] = "none"
     is_active: bool = True
+    # Guaranteed profit after discounts
+    mode: Literal["markup", "guaranteed"] = "markup"
+    target_profit_percent: Decimal | None = Field(default=None, ge=0, le=1000)
+    target_profit_fixed: Decimal | None = Field(default=None, ge=0, le=10000)
+    gateway_fee_percent: Decimal | None = Field(default=None, ge=0, lt=100)
+    gateway_fee_fixed: Decimal | None = Field(default=None, ge=0, le=1000)
+    sale_percent: Decimal | None = Field(default=None, ge=0, le=95)
+    coupon_percent: Decimal | None = Field(default=None, ge=0, le=95)
+    pro_percent: Decimal | None = Field(default=None, ge=0, le=95)
 
 
 class RuleOut(BaseModel):
@@ -54,6 +63,14 @@ class RuleOut(BaseModel):
     min_price: Decimal | None
     rounding: str
     is_active: bool
+    mode: str
+    target_profit_percent: Decimal | None
+    target_profit_fixed: Decimal | None
+    gateway_fee_percent: Decimal | None
+    gateway_fee_fixed: Decimal | None
+    sale_percent: Decimal | None
+    coupon_percent: Decimal | None
+    pro_percent: Decimal | None
     updated_at: datetime
 
 
@@ -81,6 +98,8 @@ class VariantPriceOut(BaseModel):
     cost_currency: str | None
     fx_rate: Decimal | None
     preview_price: Decimal | None
+    preview_sale_price: Decimal | None = None
+    preview_floor_price: Decimal | None = None
     stored_price: Decimal | None
     rule: str | None
     note: str | None
@@ -144,6 +163,10 @@ def _rule_values(body: RuleIn) -> dict[str, Any]:
         raise AppError(422, "validation_error", f"Choose the {body.scope} this rule applies to.")
     else:
         data["scope_value"] = body.scope_value.strip()  # type: ignore[union-attr]
+    if body.mode == "guaranteed" and body.target_profit_percent is None:
+        raise AppError(
+            422, "validation_error", "Enter the profit % this rule must keep after every discount."
+        )
     return data
 
 
@@ -330,6 +353,8 @@ async def product_prices(
                     cost_currency=q.cost_currency if isinstance(q, Quote) else None,
                     fx_rate=q.fx_rate if isinstance(q, Quote) else None,
                     preview_price=q.selling_price if isinstance(q, Quote) else None,
+                    preview_sale_price=q.sale_price if isinstance(q, Quote) else None,
+                    preview_floor_price=q.floor_price if isinstance(q, Quote) else None,
                     stored_price=sp.selling_price if sp else None,
                     rule=rules.get(q.rule.id) if isinstance(q, Quote) and q.rule else None,
                     note=None if isinstance(q, Quote) else q,

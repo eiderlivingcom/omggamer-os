@@ -204,6 +204,21 @@ class OMG_Connector_Products
         $price = isset($v['regular_price']) && $v['regular_price'] !== null && $v['regular_price'] !== '' ? wc_format_decimal($v['regular_price']) : '';
         $in_stock = !empty($v['in_stock']) && $price !== '';
         $product->set_regular_price($price);
+        // Storewide sale price and the lowest price a sale may reach after every discount (guaranteed-profit rules).
+        if (array_key_exists('sale_price', $v)) {
+            $sale = $v['sale_price'] !== null && $v['sale_price'] !== '' ? wc_format_decimal($v['sale_price']) : '';
+            $product->set_sale_price($price !== '' && $sale !== '' && (float) $sale < (float) $price ? $sale : '');
+            $product->set_date_on_sale_from(null);
+            $product->set_date_on_sale_to(null);
+        }
+        if (array_key_exists('floor_price', $v)) {
+            $floor = $v['floor_price'] !== null && $v['floor_price'] !== '' ? wc_format_decimal($v['floor_price']) : '';
+            if ($floor === '') {
+                $product->delete_meta_data('_omg_floor_price');
+            } else {
+                $product->update_meta_data('_omg_floor_price', $floor);
+            }
+        }
         $product->set_manage_stock(false);
         $product->set_stock_status($in_stock ? 'instock' : 'outofstock');
     }

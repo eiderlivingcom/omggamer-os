@@ -240,7 +240,9 @@ final class OMG_Pricing
         if (!is_numeric($reg) || (float) $reg <= 0) {
             return $discount;
         }
-        $floor = self::floor_of((float) $reg);
+        // The floor OMGGamer OS worked out from the supplier cost (guaranteed-profit rules); otherwise estimate it.
+        $meta = get_post_custom($cart_item['data']->get_id())['_omg_floor_price'][0] ?? '';
+        $floor = is_numeric($meta) && (float) $meta > 0 ? (float) $meta : self::floor_of((float) $reg);
         if (class_exists('OMG_Markets') && OMG_Markets::applies()) {
             $c = OMG_Markets::convert($floor);
             $floor = $c ?? $floor;
@@ -340,8 +342,8 @@ final class OMG_Pricing
     <?php wp_nonce_field('omg_pricing_save'); ?><input type="hidden" name="action" value="omg_pricing_save">
     <table class="form-table">
       <tr><th>Storewide sale %</th><td><input type="number" step="0.1" min="0" max="90" name="sale" value="<?php echo esc_attr($s['sale']); ?>"> <p class="description">Every product is shown with its regular price crossed out and this % off. Products with their own sale price keep it. 0 = off.</p></td></tr>
-      <tr><th>PRO discount %</th><td><input type="number" step="0.1" min="0" max="90" name="pro" value="<?php echo esc_attr($s['pro']); ?>"> <p class="description">PRO price = sale price less this %. Applied in the cart while the PRO membership is in the cart or the shopper is a member. Coupons apply on top.</p></td></tr>
-      <tr><th>OS markup %</th><td><input type="number" step="0.1" min="0" name="markup" value="<?php echo esc_attr($s['markup']); ?>"> <p class="description">The same Markup % as the pricing rule in OMGGamer OS, so the store can work out the supplier cost from the regular price.</p></td></tr>
+      <tr><th>PRO discount %</th><td><input type="number" step="0.1" min="0" max="90" name="pro" value="<?php echo esc_attr($s['pro']); ?>"> <p class="description">Keep this equal to the PRO % in the OMGGamer OS pricing rule. PRO price = sale price less this %. Applied in the cart while the PRO membership is in the cart or the shopper is a member. Coupons apply on top.</p></td></tr>
+      <tr><th>OS markup %</th><td><input type="number" step="0.1" min="0" name="markup" value="<?php echo esc_attr($s['markup']); ?>"> <p class="description">Only used for products that OMGGamer OS has not sent a cost floor for: the same Markup % as the OS rule, so the store can estimate the supplier cost.</p></td></tr>
       <tr><th>Minimum profit %</th><td><input type="number" step="0.1" min="0" name="min_profit" value="<?php echo esc_attr($s['min_profit']); ?>"> <p class="description">No coupon can take a line below supplier cost + this %.</p></td></tr>
     </table>
     <?php submit_button('Save'); ?>

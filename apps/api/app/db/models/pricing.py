@@ -39,6 +39,7 @@ class PricingRule(UUIDPk, Timestamps, Base):
         CheckConstraint(_in("scope", RULE_SCOPES), name="scope_valid"),
         CheckConstraint(_in("rounding", ROUNDING), name="rounding_valid"),
         CheckConstraint("markup_percent >= -100", name="markup_percent_range"),
+        CheckConstraint("mode IN ('markup', 'guaranteed')", name="mode_valid"),
         Index("ix_pricing_rules_scope", "scope", "scope_value"),
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -54,6 +55,16 @@ class PricingRule(UUIDPk, Timestamps, Base):
     min_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     rounding: Mapped[str] = mapped_column(String(20), nullable=False, default="none")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # "markup": price = cost + markup. "guaranteed": the price is worked out backwards so that, after the
+    # storewide sale, a coupon and the PRO discount, the sale still covers cost + profit + payment fees.
+    mode: Mapped[str] = mapped_column(String(20), nullable=False, default="markup", server_default="markup")
+    target_profit_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    target_profit_fixed: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    gateway_fee_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    gateway_fee_fixed: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    sale_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    coupon_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    pro_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
 
 
 class CurrencyRate(Base):
@@ -87,6 +98,9 @@ class VariantPrice(Base):
     cost_currency: Mapped[str | None] = mapped_column(String(3))
     fx_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 8))
     selling_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # None when no offer is available
+    # Guaranteed-profit rules: storewide sale price and the lowest price a sale may reach after all discounts.
+    sale_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    floor_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     rule_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pricing_rules.id", ondelete="SET NULL"))
     available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -95,6 +109,7 @@ class VariantPrice(Base):
     )
     # What the storefront currently shows, as last confirmed by the connector (price/stock sync).
     pushed_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    pushed_sale_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     pushed_in_stock: Mapped[bool | None] = mapped_column(Boolean)
     pushed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

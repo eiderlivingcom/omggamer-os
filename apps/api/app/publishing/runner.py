@@ -175,6 +175,12 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
                 "regular_price": str(prices[v.id].selling_price)
                 if v.id in prices and prices[v.id].selling_price is not None
                 else None,
+                "sale_price": str(prices[v.id].sale_price)
+                if v.id in prices and prices[v.id].sale_price is not None
+                else None,
+                "floor_price": str(prices[v.id].floor_price)
+                if v.id in prices and prices[v.id].floor_price is not None
+                else None,
                 "in_stock": bool(
                     v.id in prices and prices[v.id].available and prices[v.id].selling_price is not None
                 ),

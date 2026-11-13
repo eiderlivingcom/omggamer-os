@@ -104,6 +104,8 @@ class Quote:
     fx_rate: Decimal
     rule: PricingRule | None
     offer_id: uuid.UUID | None = None
+    sale_price: Decimal | None = None  # storewide sale price (guaranteed-profit rules)
+    floor_price: Decimal | None = None  # lowest price a sale may reach after every discount
 
 
 def pick_rule(rules: Sequence[PricingRule], ctx: Context, storefront_id: uuid.UUID) -> PricingRule | None:
@@ -129,13 +131,46 @@ def pick_rule(rules: Sequence[PricingRule], ctx: Context, storefront_id: uuid.UU
     return max(candidates, key=lambda r: (SCOPE_RANK[r.scope], r.storefront_id is not None, r.priority))
 
 
+def _pct(v: Decimal | None) -> Decimal:
+    return Decimal(v or 0) / 100
+
+
+def guaranteed(base: Decimal, rule: PricingRule) -> tuple[Decimal, Decimal, Decimal | None]:
+    """Regular price, floor and sale % for a guaranteed-profit rule (before rounding the regular price).
+
+    floor   = (cost x (1 + profit %) + profit amount + fixed payment fee) / (1 - payment fee %)
+              i.e. the least a customer may pay so the order still covers cost, profit and payment fees.
+    regular = floor / ((1 - sale %) x (1 - coupon %) x (1 - PRO %))
+              so that the storewide sale, a coupon and the PRO discount together end exactly at the floor.
+    """
+    gw = _pct(rule.gateway_fee_percent)
+    if gw >= 1:
+        raise PricingError("The payment fee percentage must be below 100%.")
+    need = base * (1 + _pct(rule.target_profit_percent)) + Decimal(rule.target_profit_fixed or 0)
+    need += Decimal(rule.gateway_fee_fixed or 0)
+    floor = need / (1 - gw)
+    keep = (1 - _pct(rule.sale_percent)) * (1 - _pct(rule.coupon_percent)) * (1 - _pct(rule.pro_percent))
+    if keep <= 0:
+        raise PricingError("The sale, coupon and PRO discounts add up to 100% or more.")
+    regular = floor / keep
+    return regular, floor, (_pct(rule.sale_percent) if rule.sale_percent else None)
+
+
 def quote(cost: Decimal, cost_currency: str, currency: str, rule: PricingRule | None, rates: Rates) -> Quote:
     fx = rates.get(cost_currency, currency)
     base = cost * fx
+    sale_pct: Decimal | None = None
+    floor_price: Decimal | None = None
     if rule is None:
         price = base
         floor = base
         mode = "none"
+    elif rule.mode == "guaranteed":
+        price, floor_price, sale_pct = guaranteed(base, rule)
+        floor = price  # the regular price itself is the floor for rounding
+        if rule.min_price is not None:
+            floor = max(floor, Decimal(rule.min_price))
+        mode = rule.rounding
     else:
         price = base * (1 + Decimal(rule.markup_percent) / 100) + Decimal(rule.markup_fixed)
         floor = base
@@ -150,7 +185,13 @@ def quote(cost: Decimal, cost_currency: str, currency: str, rule: PricingRule | 
     final = round_up(price, mode)
     if final < floor:  # rounding never takes a price below the floor
         final = round_up(floor, "none") if mode == "none" else round_up(floor + CENT, mode)
-    return Quote(final.quantize(CENT), currency, cost, cost_currency.upper(), fx, rule)
+    final = final.quantize(CENT)
+    q = Quote(final, currency, cost, cost_currency.upper(), fx, rule)
+    if floor_price is not None:
+        q.floor_price = floor_price.quantize(CENT, rounding=ROUND_CEILING)
+        if sale_pct:
+            q.sale_price = (final * (1 - sale_pct)).quantize(CENT, rounding=ROUND_CEILING)
+    return q
 
 
 class PricingEngine:
@@ -273,6 +314,8 @@ class PricingEngine:
                     "cost_currency": q.cost_currency,
                     "fx_rate": q.fx_rate,
                     "selling_price": q.selling_price,
+                    "sale_price": q.sale_price,
+                    "floor_price": q.floor_price,
                     "currency": q.currency,
                     "rule_id": q.rule.id if q.rule else None,
                     "available": True,
@@ -286,6 +329,8 @@ class PricingEngine:
                     "cost_currency": None,
                     "fx_rate": None,
                     "selling_price": None,
+                    "sale_price": None,
+                    "floor_price": None,
                     "currency": currency,
                     "rule_id": None,
                     "available": False,

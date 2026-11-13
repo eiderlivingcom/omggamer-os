@@ -106,7 +106,10 @@ async def mark_pushed(db: AsyncSession, sf_id: uuid.UUID, variant_ids: Sequence[
         update(VariantPrice)
         .where(VariantPrice.storefront_id == sf_id, VariantPrice.variant_id.in_(list(variant_ids)))
         .values(
-            pushed_price=VariantPrice.selling_price, pushed_in_stock=VariantPrice.available, pushed_at=now()
+            pushed_price=VariantPrice.selling_price,
+            pushed_sale_price=VariantPrice.sale_price,
+            pushed_in_stock=VariantPrice.available,
+            pushed_at=now(),
         )
     )
 
@@ -158,6 +161,7 @@ async def push_prices(
                 for r in rows
                 if r.pushed_at is None
                 or r.pushed_price != r.selling_price
+                or r.pushed_sale_price != r.sale_price
                 or r.pushed_in_stock != r.available
             ]
             stats["changed"] += len(todo)
@@ -168,6 +172,8 @@ async def push_prices(
                         "external_id": str(by_variant[r.variant_id].product_id),
                         "variant_id": str(r.variant_id),
                         "regular_price": str(r.selling_price) if r.selling_price is not None else None,
+                        "sale_price": str(r.sale_price) if r.sale_price is not None else None,
+                        "floor_price": str(r.floor_price) if r.floor_price is not None else None,
                         "in_stock": bool(r.available and r.selling_price is not None),
                     }
                     for r in chunk

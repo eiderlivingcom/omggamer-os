@@ -19,6 +19,14 @@ type Rule = {
   min_price: string | null;
   rounding: string;
   is_active: boolean;
+  mode: "markup" | "guaranteed";
+  target_profit_percent: string | null;
+  target_profit_fixed: string | null;
+  gateway_fee_percent: string | null;
+  gateway_fee_fixed: string | null;
+  sale_percent: string | null;
+  coupon_percent: string | null;
+  pro_percent: string | null;
 };
 type Rate = { base: string; quote: string; rate: string; source: string; updated_at: string };
 type History = { variant_id: string; label: string; storefront: string; old_price: string | null; new_price: string | null; cost: string | null; cost_currency: string | null; currency: string; reason: string; created_at: string };
@@ -30,7 +38,21 @@ const SCOPES: Record<Rule["scope"], string> = { global: "All products", supplier
 const EMPTY = {
   name: "", scope: "global" as Rule["scope"], scope_value: "", storefront: "", priority: 0, markup_percent: "15", markup_fixed: "0",
   min_margin_percent: "", min_margin_fixed: "", min_price: "", rounding: "cents_99", is_active: true,
+  mode: "markup" as Rule["mode"], target_profit_percent: "15", target_profit_fixed: "0.50", gateway_fee_percent: "3.5", gateway_fee_fixed: "0.30",
+  sale_percent: "50", coupon_percent: "10", pro_percent: "10",
 };
+
+/** Same maths as the API: the least a customer may pay, and the regular price that reaches it after every discount. */
+function guaranteedExample(f: typeof EMPTY, cost: number) {
+  const n = (v: string) => Number(v) || 0;
+  const floor = (cost * (1 + n(f.target_profit_percent) / 100) + n(f.target_profit_fixed) + n(f.gateway_fee_fixed)) / (1 - n(f.gateway_fee_percent) / 100);
+  const keep = (1 - n(f.sale_percent) / 100) * (1 - n(f.coupon_percent) / 100) * (1 - n(f.pro_percent) / 100);
+  const regular = keep > 0 ? floor / keep : NaN;
+  const sale = regular * (1 - n(f.sale_percent) / 100);
+  const coupon = sale * (1 - n(f.coupon_percent) / 100);
+  const all = coupon * (1 - n(f.pro_percent) / 100);
+  return { floor, regular, sale, coupon, all };
+}
 
 function flatten(nodes: CategoryNode[], depth = 0): { id: string; name: string }[] {
   return nodes.flatMap((n) => [{ id: n.id, name: `${"— ".repeat(depth)}${n.name}` }, ...flatten(n.children, depth + 1)]);
@@ -95,6 +117,13 @@ export default function PricingPage() {
       min_margin_percent: form.min_margin_percent || null,
       min_margin_fixed: form.min_margin_fixed || null,
       min_price: form.min_price || null,
+      target_profit_percent: form.target_profit_percent || null,
+      target_profit_fixed: form.target_profit_fixed || null,
+      gateway_fee_percent: form.gateway_fee_percent || null,
+      gateway_fee_fixed: form.gateway_fee_fixed || null,
+      sale_percent: form.sale_percent || null,
+      coupon_percent: form.coupon_percent || null,
+      pro_percent: form.pro_percent || null,
     };
     void act(async () => {
       await api(editing ? `/pricing/rules/${editing}` : "/pricing/rules", { method: editing ? "PUT" : "POST", json: body });
@@ -109,11 +138,19 @@ export default function PricingPage() {
       name: r.name, scope: r.scope, scope_value: r.scope_value ?? "", storefront: storefronts.find((s) => s.id === r.storefront_id)?.code ?? "",
       priority: r.priority, markup_percent: r.markup_percent, markup_fixed: r.markup_fixed, min_margin_percent: r.min_margin_percent ?? "",
       min_margin_fixed: r.min_margin_fixed ?? "", min_price: r.min_price ?? "", rounding: r.rounding, is_active: r.is_active,
+      mode: r.mode ?? "markup", target_profit_percent: r.target_profit_percent ?? "", target_profit_fixed: r.target_profit_fixed ?? "",
+      gateway_fee_percent: r.gateway_fee_percent ?? "", gateway_fee_fixed: r.gateway_fee_fixed ?? "", sale_percent: r.sale_percent ?? "",
+      coupon_percent: r.coupon_percent ?? "", pro_percent: r.pro_percent ?? "",
     });
   }
 
   const describe = (r: Rule) => {
     const parts = [];
+    if (r.mode === "guaranteed") {
+      parts.push(`Guaranteed ${Number(r.target_profit_percent)}% + ${Number(r.target_profit_fixed ?? 0).toFixed(2)} profit after ${Number(r.sale_percent ?? 0)}% sale, ${Number(r.coupon_percent ?? 0)}% coupon, ${Number(r.pro_percent ?? 0)}% PRO and fees ${Number(r.gateway_fee_percent ?? 0)}% + ${Number(r.gateway_fee_fixed ?? 0).toFixed(2)}`);
+      parts.push(ROUNDING[r.rounding] ?? r.rounding);
+      return parts.join(" · ");
+    }
     if (Number(r.markup_percent)) parts.push(`+${Number(r.markup_percent)}%`);
     if (Number(r.markup_fixed)) parts.push(`+${Number(r.markup_fixed).toFixed(2)}`);
     if (r.min_margin_percent) parts.push(`min margin ${Number(r.min_margin_percent)}%`);
@@ -213,10 +250,42 @@ export default function PricingPage() {
                   </select>
                 </label>
                 <label className="block text-xs font-semibold text-ink-700">Priority<input type="number" className={input} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} /></label>
-                <label className="block text-xs font-semibold text-ink-700">Markup %<input type="number" step="0.1" className={input} value={form.markup_percent} onChange={(e) => setForm({ ...form, markup_percent: e.target.value })} /></label>
-                <label className="block text-xs font-semibold text-ink-700">Fixed markup<input type="number" step="0.01" className={input} value={form.markup_fixed} onChange={(e) => setForm({ ...form, markup_fixed: e.target.value })} /></label>
-                <label className="block text-xs font-semibold text-ink-700">Min margin %<input type="number" step="0.1" min={0} className={input} value={form.min_margin_percent} onChange={(e) => setForm({ ...form, min_margin_percent: e.target.value })} /></label>
-                <label className="block text-xs font-semibold text-ink-700">Min margin (amount)<input type="number" step="0.01" min={0} className={input} value={form.min_margin_fixed} onChange={(e) => setForm({ ...form, min_margin_fixed: e.target.value })} /></label>
+                <label className="col-span-2 block text-xs font-semibold text-ink-700">
+                  Price method
+                  <select className={input} value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value as Rule["mode"] })}>
+                    <option value="markup">Markup on cost</option>
+                    <option value="guaranteed">Guaranteed profit after discounts</option>
+                  </select>
+                </label>
+                {form.mode === "markup" ? (
+                  <>
+                    <label className="block text-xs font-semibold text-ink-700">Markup %<input type="number" step="0.1" className={input} value={form.markup_percent} onChange={(e) => setForm({ ...form, markup_percent: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Fixed markup<input type="number" step="0.01" className={input} value={form.markup_fixed} onChange={(e) => setForm({ ...form, markup_fixed: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Min margin %<input type="number" step="0.1" min={0} className={input} value={form.min_margin_percent} onChange={(e) => setForm({ ...form, min_margin_percent: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Min margin (amount)<input type="number" step="0.01" min={0} className={input} value={form.min_margin_fixed} onChange={(e) => setForm({ ...form, min_margin_fixed: e.target.value })} /></label>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-xs font-semibold text-ink-700">Profit % on cost<input type="number" step="0.1" min={0} required className={input} value={form.target_profit_percent} onChange={(e) => setForm({ ...form, target_profit_percent: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Extra profit per sale<input type="number" step="0.01" min={0} className={input} value={form.target_profit_fixed} onChange={(e) => setForm({ ...form, target_profit_fixed: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Payment fee %<input type="number" step="0.01" min={0} max={99} className={input} value={form.gateway_fee_percent} onChange={(e) => setForm({ ...form, gateway_fee_percent: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Payment fee (fixed)<input type="number" step="0.01" min={0} className={input} value={form.gateway_fee_fixed} onChange={(e) => setForm({ ...form, gateway_fee_fixed: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Storewide sale %<input type="number" step="1" min={0} max={95} className={input} value={form.sale_percent} onChange={(e) => setForm({ ...form, sale_percent: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">Coupon %<input type="number" step="1" min={0} max={95} className={input} value={form.coupon_percent} onChange={(e) => setForm({ ...form, coupon_percent: e.target.value })} /></label>
+                    <label className="block text-xs font-semibold text-ink-700">PRO %<input type="number" step="1" min={0} max={95} className={input} value={form.pro_percent} onChange={(e) => setForm({ ...form, pro_percent: e.target.value })} /></label>
+                    {(() => {
+                      const x = guaranteedExample(form, 10);
+                      const f = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : "–");
+                      return (
+                        <div className="col-span-2 rounded-lg bg-ink-50 p-3 text-xs text-ink-700">
+                          <div className="mb-1 font-semibold text-ink-900">Example: supplier cost 10.00</div>
+                          <div>Regular price (crossed out) <b>{f(x.regular)}</b> → sale {f(x.sale)} → coupon {f(x.coupon)} → coupon + PRO <b>{f(x.all)}</b></div>
+                          <div className="mt-1 text-ink-500">Lowest the customer can pay: {f(x.floor)}. After payment fees that still leaves cost + {Number(form.target_profit_percent) || 0}% + {Number(form.target_profit_fixed || 0).toFixed(2)}. The regular price is then rounded up.</div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
                 <label className="block text-xs font-semibold text-ink-700">Min selling price<input type="number" step="0.01" min={0} className={input} value={form.min_price} onChange={(e) => setForm({ ...form, min_price: e.target.value })} /></label>
                 <label className="block text-xs font-semibold text-ink-700">
                   Rounding

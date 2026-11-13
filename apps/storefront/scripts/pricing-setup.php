@@ -25,6 +25,8 @@ if ($code) {
     $co->set_discount_type('percent');
     $co->set_amount(10);
     $co->set_individual_use(false);
+    $pro = class_exists('OMG_PS_Checkout') ? (int) OMG_PS_Checkout::PRO_PRODUCT : 1906;
+    $co->set_excluded_product_ids([$pro]);   // the PRO membership itself is never discounted
     $co->set_description('10% off. Works together with the storewide sale and PRO.');
     $co->save();
     WP_CLI::success(($id ? 'Updated' : 'Created') . " coupon {$code}: 10% off, combinable.");

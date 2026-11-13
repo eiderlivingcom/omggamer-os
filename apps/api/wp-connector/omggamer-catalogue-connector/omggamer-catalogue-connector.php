@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       OMGGamer Catalogue Connector
  * Description:       Secure receiving endpoint for approved product data from OMGGamer OS. Creates and updates WooCommerce products by their OMGGamer OS ID, never duplicates them and never touches orders.
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            OMGGamer
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OMG_CONNECTOR_VERSION', '1.2.0');
+define('OMG_CONNECTOR_VERSION', '1.3.0');
 define('OMG_CONNECTOR_FILE', __FILE__);
 define('OMG_CONNECTOR_NS', 'omggamer-connector/v1');
 
