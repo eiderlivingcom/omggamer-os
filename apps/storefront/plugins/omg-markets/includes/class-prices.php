@@ -32,6 +32,34 @@ final class OMG_Markets_Prices
         // OMGGamer extras that store a base-currency amount: PRO member price and the free-game target.
         add_filter('get_post_metadata', [__CLASS__, 'pro_price'], 99, 4);
         add_action('wp_enqueue_scripts', [__CLASS__, 'free_game_target'], 999);
+        add_filter('rest_post_dispatch', [__CLASS__, 'header'], 99);
+        // Card templates print "from <strong>${PRO price}</strong> with PRO" with a typed "$".
+        add_filter('bricks/frontend/render_data', [__CLASS__, 'pro_symbol'], 99);
+        add_action('send_headers', [__CLASS__, 'header']);
+    }
+
+    public static function pro_symbol($html)
+    {
+        if (!is_string($html) || strpos($html, 'omg-ac-pro-t') === false || !self::active()) {
+            return $html;
+        }
+        $sym = get_woocommerce_currency_symbol(OMG_Markets::currency());
+        return preg_replace('~(class="[^"]*omg-ac-pro-t[^"]*"[^>]*>\s*from\s*<strong>)\$~', '${1}' . $sym, $html);
+    }
+
+    /** X-OMG-Market: the market used for this response, or "base (reason)". */
+    public static function header($response = null)
+    {
+        $why = OMG_Markets::why_not();
+        $v = $why === '' ? OMG_Markets::current() . ' ' . OMG_Markets::currency() : 'base (' . $why . ')';
+        if ($response instanceof WP_HTTP_Response) {
+            $response->header('X-OMG-Market', $v);
+            return $response;
+        }
+        if (!headers_sent()) {
+            header('X-OMG-Market: ' . $v);
+        }
+        return $response;
     }
 
     private static function active(): bool

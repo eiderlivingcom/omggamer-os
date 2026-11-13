@@ -116,23 +116,32 @@ final class OMG_Markets
     /** Should prices on this request follow the visitor's market? */
     public static function applies(): bool
     {
+        return self::why_not() === '';
+    }
+
+    /** Empty when the market applies, otherwise the reason it does not (also sent as X-OMG-Market). */
+    public static function why_not(): string
+    {
         if (self::$forced) {
-            return true;
+            return '';
         }
-        if ((is_admin() && !self::is_front_ajax()) || (defined('WP_CLI') && WP_CLI) || wp_doing_cron()) {
-            return false;
+        if (is_admin() && !self::is_front_ajax()) {
+            return 'admin';
+        }
+        if ((defined('WP_CLI') && WP_CLI) || wp_doing_cron()) {
+            return 'cli';
         }
         $uri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($uri, '/wp-json/') !== false || strpos($uri, 'rest_route=') !== false) {
             // Back-office and integration APIs (OMGGamer OS connector, WooCommerce admin API) always use the base currency.
             if (preg_match('~(wp-json/|rest_route=/?)(omggamer|wc/v\d|wc-analytics|wc-admin|wp/v2|dokan|mcp)~', $uri)) {
-                return false;
+                return 'api-route';
             }
             if (!empty($_SERVER['HTTP_AUTHORIZATION']) || !empty($_SERVER['PHP_AUTH_USER'])) {
-                return false;
+                return 'api-auth';
             }
         }
-        return true;
+        return '';
     }
 
     private static function is_front_ajax(): bool
