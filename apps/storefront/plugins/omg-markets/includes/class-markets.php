@@ -137,9 +137,6 @@ final class OMG_Markets
             if (preg_match('~(wp-json/|rest_route=/?)(omggamer|wc/v\d|wc-analytics|wc-admin|wp/v2|dokan|mcp)~', $uri)) {
                 return 'api-route';
             }
-            if (!empty($_SERVER['HTTP_AUTHORIZATION']) || !empty($_SERVER['PHP_AUTH_USER'])) {
-                return 'api-auth';
-            }
         }
         return '';
     }
