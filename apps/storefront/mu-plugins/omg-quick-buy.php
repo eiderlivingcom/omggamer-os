@@ -160,6 +160,8 @@ final class OMG_Quick_Buy
 .omg-qb-wrap{position:relative;display:flex;flex-direction:column;min-width:0}
 .omg-qb-wrap>.omg-ac-card{flex:1 1 auto;position:relative;z-index:1}
 .omg-qb-wrap:hover,.omg-qb-wrap:focus-within{z-index:30}
+/* Lift the card's own wrappers too, or the next row would paint over the buttons. */
+:has(> .omg-qb-wrap:hover),:has(> .omg-qb-wrap:focus-within),:has(> * > .omg-qb-wrap:hover),:has(> * > .omg-qb-wrap:focus-within){position:relative;z-index:30}
 .omg-qb{position:absolute;left:0;right:0;top:calc(100% - 1px);z-index:2;display:flex;gap:8px;padding:2px 14px 14px;background:#fff;border:1px solid #ECE9F3;border-top:0;border-radius:0 0 16px 16px;box-shadow:0 18px 30px -8px rgba(13,6,25,.16);clip-path:inset(0 -40px -60px -40px);opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
 .omg-qb-wrap:hover .omg-qb,.omg-qb-wrap:focus-within .omg-qb{opacity:1;visibility:visible;transform:none;transition:opacity .16s ease,transform .16s ease}
 .omg-qb-wrap:hover>.omg-ac-card,.omg-qb-wrap:focus-within>.omg-ac-card{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent;box-shadow:0 16px 36px rgba(13,6,25,.1)}
