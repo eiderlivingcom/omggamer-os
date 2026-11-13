@@ -115,8 +115,12 @@ final class OMG_Mobile_Buy
     document.body.classList.add('omg-mb-on');
     var box = bar.querySelector('.omg-mb-opts');
 
+    var sig = '';
     function paint(){
       var opts = options();
+      var now = JSON.stringify(opts.map(function(o){ return [o.pro, o.price, o.on]; }));
+      if (now === sig) return;   // the buy box ticks (countdown) every second: only redraw on real changes
+      sig = now;
       var pro = opts.filter(function(o){ return o.pro; })[0], reg = opts.filter(function(o){ return !o.pro; })[0];
       var save = pro && reg ? Math.round((1 - num(pro.price) / num(reg.price)) * 100) : NaN;
       box.style.setProperty('--n', Math.max(1, opts.length));
@@ -130,7 +134,7 @@ final class OMG_Mobile_Buy
         b.setAttribute('aria-label', o.price + (o.pro ? ' with PRO' : ''));
         b.addEventListener('click', function(){
           if (o.input && !o.input.checked) { o.input.checked = true; o.input.dispatchEvent(new Event('change', { bubbles: true })); }
-          paint();
+          setTimeout(paint, 30);
         });
         box.appendChild(b);
       });
