@@ -240,6 +240,18 @@ final class OMG_Markets_Feed
         return ['xml' => $out, 'items' => count($items), 'skipped' => $skipped];
     }
 
+    private static function title(WC_Product $p, ?WC_Product $parent): string
+    {
+        $t = html_entity_decode($parent ? $parent->get_name() : $p->get_name());
+        if ($parent) {
+            $opts = wc_get_formatted_variation($p, true, false, false);
+            if ($opts !== '') {
+                $t .= ' - ' . html_entity_decode(wp_strip_all_tags($opts));
+            }
+        }
+        return function_exists('mb_substr') ? mb_substr($t, 0, 150) : substr($t, 0, 150);
+    }
+
     private static function item(WC_Product $p, ?WC_Product $parent, array $base, array $regions, string $cc, string $cur, callable $skip): ?array
     {
         $ok = self::region_ok($regions, $cc);
@@ -267,7 +279,7 @@ final class OMG_Markets_Feed
         $id = $p->get_sku() ?: (string) $p->get_id();
         $item = [
             'g:id' => substr($id, 0, 50),
-            'g:title' => function_exists('mb_substr') ? mb_substr(html_entity_decode($p->get_name()), 0, 150) : substr($p->get_name(), 0, 150),
+            'g:title' => self::title($p, $parent),
             'g:description' => $base['description'],
             'g:link' => add_query_arg('market', strtolower($cc), $p->get_permalink()),
             'g:image_link' => $img,
