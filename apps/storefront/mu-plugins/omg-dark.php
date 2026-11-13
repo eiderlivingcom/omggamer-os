@@ -336,6 +336,8 @@ html body #omg-hdr-search::after{background:var(--d-card)!important;color:var(--
 html body .omg-cart-btn svg,html body .omg-rel-arrow svg,html body #omg-hdr-cart svg{stroke:var(--d-ink)!important;color:var(--d-ink)!important}
 html body .omg-cart-btn,html body .omg-rel-arrow{color:var(--d-ink)!important}
 html body #omg-hdr-cart img{filter:brightness(0) invert(1)}
+html body #omg-hdr-cart svg *,html body #omg-hdr-cart i,html body #omg-hdr-cart::before{stroke:var(--d-ink)!important;color:var(--d-ink)!important}
+html body #omg-hdr-cart [style*="mask"],html body #omg-hdr-cart::before{background-color:var(--d-ink)!important}
 html body .brxe-heading:not([class*="omg-hero"]):not([class*="grad"]){color:var(--d-ink)}
 html body [class*="omg-sl-"]:is(a,button,details,div,span):not(.omg-sl-logo):not([class*="btn"]:not(.is-ghost)){border-color:var(--d-line)!important}
 html body .omg-sl-hero,html body .omg-sl-tabs,html body .omg-sl-filters,html body .omg-sl-chip,html body .omg-sl-pager>button,html body .omg-sl-sort>button{background-color:var(--d-card)!important;color:var(--d-ink)!important}
