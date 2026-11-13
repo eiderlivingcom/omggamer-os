@@ -155,33 +155,27 @@ final class OMG_Quick_Buy
         ];
         ?>
 <style id="omg-quick-buy-css">
-/* Quick buy: on hover the card grows downwards with "add to cart" and "Buy now" under the price.
-   The extension floats over the row below, so the grid never shifts. */
-.omg-qb-wrap{position:relative;display:flex;flex-direction:column;min-width:0}
-.omg-qb-wrap>.omg-ac-card{flex:1 1 auto;position:relative;z-index:1}
-.omg-qb-wrap:hover,.omg-qb-wrap:focus-within{z-index:30}
-/* Lift the card's own wrappers too, or the next row would paint over the buttons. */
-:has(> .omg-qb-wrap:hover),:has(> .omg-qb-wrap:focus-within),:has(> * > .omg-qb-wrap:hover),:has(> * > .omg-qb-wrap:focus-within){z-index:30}
-.omg-qb{position:absolute;left:0;right:0;top:calc(100% - 1px);z-index:2;display:flex;gap:8px;padding:2px 14px 14px;background:#fff;border:1px solid #ECE9F3;border-top:0;border-radius:0 0 16px 16px;box-shadow:0 18px 30px -8px rgba(13,6,25,.16);clip-path:inset(0 -40px -60px -40px);opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
-.omg-qb-wrap:hover .omg-qb,.omg-qb-wrap:focus-within .omg-qb{opacity:1;visibility:visible;transform:none;transition:opacity .16s ease,transform .16s ease}
-.omg-qb-wrap:hover>.omg-ac-card,.omg-qb-wrap:focus-within>.omg-ac-card{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent;box-shadow:0 16px 36px rgba(13,6,25,.1)}
+/* Quick buy. The card keeps its size and place: on hover its text block slides up over the bottom of the
+   cover image and "add to cart" + "Buy now" appear underneath, inside the card. Nothing is wrapped, so
+   grid rows, card heights and the platform badge are untouched. */
+.omg-qb-host>.omg-ac-card .omg-ac-body{position:relative;z-index:2;background:#fff;transition:transform .2s ease,box-shadow .2s ease}
+.omg-qb{position:absolute;z-index:4;left:var(--omg-qb-l,0);width:var(--omg-qb-w,100%);top:var(--omg-qb-t,auto);display:flex;gap:8px;padding:0 14px;box-sizing:border-box;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .16s ease,transform .2s ease,visibility 0s linear .2s}
+.omg-qb-host:hover>.omg-ac-card .omg-ac-body,.omg-qb-host:focus-within>.omg-ac-card .omg-ac-body{transform:translateY(calc(-1 * var(--omg-qb-h,58px)));box-shadow:0 -10px 24px -14px rgba(13,6,25,.35)}
+.omg-qb-host:hover .omg-qb,.omg-qb-host:focus-within .omg-qb{opacity:1;visibility:visible;transform:none;transition:opacity .16s ease .04s,transform .2s ease}
 .omg-qb button,.omg-qb a{height:44px;border:0;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 15px/1 Poppins,system-ui,sans-serif;cursor:pointer;text-decoration:none;transition:background .15s,filter .15s,color .15s}
 .omg-qb .omg-qb-add{width:48px;flex:0 0 48px;background:#F3F0FA;color:#0D0619;border:1px solid #ECE9F3}
 .omg-qb .omg-qb-add:hover{background:#E9E3F7;color:#7C3AED}
-.omg-qb .omg-qb-buy{flex:1 1 auto;background:linear-gradient(120deg,#7C3AED 0%,#C026D3 100%);color:#fff;box-shadow:0 8px 18px -6px rgba(124,58,237,.55)}
+.omg-qb .omg-qb-buy{flex:1 1 auto;min-width:0;background:linear-gradient(120deg,#7C3AED 0%,#C026D3 100%);color:#fff;box-shadow:0 8px 18px -6px rgba(124,58,237,.55)}
 .omg-qb .omg-qb-buy:hover{filter:brightness(1.07);color:#fff}
 .omg-qb a:focus-visible,.omg-qb button:focus-visible{outline:2px solid #7C3AED;outline-offset:2px}
 .omg-qb svg{width:20px;height:20px;flex:none}
 .omg-qb .omg-qb-add[aria-busy=true]{opacity:.6;cursor:wait}
 .omg-qb .omg-qb-add.is-done{background:#16A34A;border-color:#16A34A;color:#fff}
-/* Rows that scroll sideways would cut the extension off: give them room underneath. */
-.omg-qb-room{padding-bottom:66px!important}
-/* Touch screens have no hover: show the buttons as part of the card. */
+@media (max-width:420px){.omg-qb{padding:0 10px;gap:6px}.omg-qb button,.omg-qb a{height:40px;font-size:14px}.omg-qb .omg-qb-add{width:42px;flex-basis:42px}}
+/* Touch screens have no hover: keep the buttons visible and the text block raised. */
 @media (hover:none){
-  .omg-qb{position:static;opacity:1;visibility:visible;transform:none;box-shadow:none;clip-path:none;padding:2px 12px 12px}
-  .omg-qb-wrap>.omg-ac-card{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent}
-  .omg-qb-room{padding-bottom:4px!important}
-  .omg-qb button,.omg-qb a{height:40px;font-size:14px}.omg-qb .omg-qb-add{width:42px;flex-basis:42px}
+  .omg-qb{opacity:1;visibility:visible;transform:none}
+  .omg-qb-host>.omg-ac-card .omg-ac-body{transform:translateY(calc(-1 * var(--omg-qb-h,58px)))}
 }
 </style>
 <script id="omg-quick-buy-js">
@@ -191,11 +185,14 @@ final class OMG_Quick_Buy
   var icoCart = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/><path d="M14 4.5v5M11.5 7h5"/></svg>';
   var icoBag = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>';
   function key(href){ try { var u = new URL(href, location.href); return (u.origin + u.pathname).replace(/\/$/, ''); } catch(e){ return ''; } }
-  function room(wrap){
-    for (var e = wrap.parentElement, i = 0; e && e !== document.body && i < 8; e = e.parentElement, i++) {
-      var cs = getComputedStyle(e);
-      if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') { e.classList.add('omg-qb-room'); return; }
-    }
+  function place(host, card, bar){
+    var hr = host.getBoundingClientRect(), cr = card.getBoundingClientRect();
+    if (!cr.width) return;
+    var bh = bar.offsetHeight || 44, pad = 14;
+    host.style.setProperty('--omg-qb-l', (cr.left - hr.left) + 'px');
+    host.style.setProperty('--omg-qb-w', cr.width + 'px');
+    host.style.setProperty('--omg-qb-t', (cr.bottom - hr.top - bh - pad) + 'px');
+    host.style.setProperty('--omg-qb-h', (bh + pad) + 'px');
   }
   function addToCart(btn, id){
     if (btn.getAttribute('aria-busy') === 'true') return;
@@ -213,9 +210,15 @@ final class OMG_Quick_Buy
       .catch(function(){ btn.removeAttribute('aria-busy'); });
   }
   function enhance(card, d){
-    if (!d || !d.ok || card.closest('.omg-qb-wrap')) return;
-    var wrap = document.createElement('div'); wrap.className = 'omg-qb-wrap';
-    card.parentNode.insertBefore(wrap, card); wrap.appendChild(card);
+    var host = card.parentElement;
+    if (!d || !d.ok || !host || card.dataset.omgQbDone) return;
+    if (host.querySelectorAll(':scope > .omg-ac-card').length > 1) {   // several cards share a parent: give this one its own box
+      var box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;min-width:0';
+      card.parentNode.insertBefore(box, card); box.appendChild(card); card.style.flex = '1 1 auto'; host = box;
+    }
+    card.dataset.omgQbDone = '1';
+    host.classList.add('omg-qb-host');
+    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
     var bar = document.createElement('div'); bar.className = 'omg-qb';
     var title = (card.querySelector('.omg-ac-title') || {}).textContent || 'this product';
     var add = document.createElement('button'); add.type = 'button'; add.className = 'omg-qb-add';
@@ -223,8 +226,10 @@ final class OMG_Quick_Buy
     add.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); addToCart(add, d.add); });
     var buy = document.createElement('a'); buy.className = 'omg-qb-buy'; buy.href = d.buy; buy.rel = 'nofollow';
     buy.innerHTML = icoBag + '<span>Buy now</span>'; buy.setAttribute('aria-label', 'Buy ' + title.trim() + ' now');
-    bar.appendChild(add); bar.appendChild(buy); wrap.appendChild(bar);
-    room(wrap);
+    bar.appendChild(add); bar.appendChild(buy);
+    card.insertAdjacentElement('afterend', bar);
+    place(host, card, bar);
+    if (window.ResizeObserver) { new ResizeObserver(function(){ place(host, card, bar); }).observe(card); }
   }
   var pending = {};
   function scan(root){
