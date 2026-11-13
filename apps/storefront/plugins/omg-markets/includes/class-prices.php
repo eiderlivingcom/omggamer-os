@@ -32,6 +32,7 @@ final class OMG_Markets_Prices
         // OMGGamer extras that store a base-currency amount: PRO member price and the free-game target.
         add_filter('get_post_metadata', [__CLASS__, 'pro_price'], 99, 4);
         add_action('wp_enqueue_scripts', [__CLASS__, 'free_game_target'], 999);
+        add_action('wp_footer', [__CLASS__, 'chart_symbol'], 5);
         add_filter('rest_post_dispatch', [__CLASS__, 'header'], 99);
         // Card templates print "from <strong>${PRO price}</strong> with PRO" with a typed "$".
         add_filter('bricks/frontend/render_data', [__CLASS__, 'pro_symbol'], 99);
@@ -127,22 +128,62 @@ final class OMG_Markets_Prices
         return $rates;
     }
 
+    /** Base-currency amounts kept in post meta by OMGGamer: PRO member price and the monthly price history. */
     public static function pro_price($value, $object_id, $meta_key, $single)
     {
-        if ($meta_key !== 'omg_pro_price' || self::$reading_meta || !self::active()) {
+        if (!in_array($meta_key, ['omg_pro_price', 'omg_price_history'], true) || self::$reading_meta || !self::active()) {
             return $value;
         }
         self::$reading_meta = true;
-        $raw = get_post_meta($object_id, 'omg_pro_price', true);
+        $raw = get_post_meta($object_id, $meta_key, true);
         self::$reading_meta = false;
+        if ($meta_key === 'omg_price_history') {
+            $h = is_array($raw) ? $raw : json_decode((string) $raw, true);
+            if (!is_array($h) || !$h) {
+                return $value;
+            }
+            foreach ($h as $k => $v) {
+                $c = OMG_Markets::convert($v);
+                if ($c === null) {
+                    return $value;
+                }
+                $h[$k] = $c;
+            }
+            $out = is_array($raw) ? $h : wp_json_encode($h);
+            return [$out];
+        }
         if ($raw === '' || !is_numeric($raw)) {
             return $value;
         }
         $c = OMG_Markets::convert($raw);
-        if ($c === null) {
-            return $value;
+        return $c === null ? $value : [(string) $c];
+    }
+
+    /** The price-history chart in the product templates prints a typed "$"; show the market's symbol instead. */
+    public static function chart_symbol(): void
+    {
+        if (!self::active() || !is_singular('product')) {
+            return;
         }
-        return $single ? [(string) $c] : [(string) $c];
+        $sym = html_entity_decode(get_woocommerce_currency_symbol(OMG_Markets::currency()));
+        ?>
+<script id="omg-markets-chart">
+(function(){
+  var sym = <?php echo wp_json_encode($sym); ?>;
+  function fix(root){
+    root.querySelectorAll('.omg-ph-stat, .omg-ph-pt b, .omg-ph-tip, .omg-ph-stats *').forEach(function(el){
+      el.childNodes.forEach(function(n){ if (n.nodeType === 3 && /\$\s*\d/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/\$(\s*\d)/g, sym + '$1'); });
+    });
+  }
+  function start(){
+    var host = document.getElementById('omg-ph'); if (!host) return;
+    fix(host);
+    if (window.MutationObserver) new MutationObserver(function(){ fix(host); }).observe(host, {childList:true, subtree:true, characterData:true});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>
+        <?php
     }
 
     public static function free_game_target(): void
