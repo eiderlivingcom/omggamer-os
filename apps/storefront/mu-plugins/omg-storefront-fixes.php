@@ -158,12 +158,11 @@ html body #omg-dg #omg-dg-related-slot>#omg-dg-related-head{order:-1}
 /* Seller profile card: hidden for now (offers stay). */
 #omg-dg-seller,.omg-dg-seller-card{display:none!important}
 
-/* Specs: label and value start on the same line, also when a value has a second line (guide link). */
+/* Specs: icon (the row's ::before), label and value start on one line; a guide link sits under the value. */
 html body #omg-dg .omg-dg-spec{align-items:start!important}
-html body #omg-dg .omg-dg-spec>*:nth-child(n+2){align-self:start;margin-top:8px!important}
-html body #omg-dg .omg-dg-spec>*:first-child{align-self:start}
-html body #omg-dg #omg-dg-langs{align-items:start!important}
-html body #omg-dg #omg-dg-langs>*:nth-child(2){margin-top:8px}
+html body #omg-dg .omg-dg-spec::before{align-self:start!important;margin:0!important}
+html body #omg-dg .omg-dg-spec>.omg-dg-spec-k,html body #omg-dg .omg-dg-spec>.omg-dg-spec-v{align-self:baseline!important;margin-top:9px!important;margin-bottom:0!important}
+html body #omg-dg .omg-dg-spec>.omg-spec-link{align-self:start!important;margin-top:2px!important}
 
 /* Buy box: the same layout on every product. Price options first, then trust badges, PRO note, free-game bar. */
 html body #omg-dg #omg-dg-buy>.omg-bb{order:-2}
