@@ -231,7 +231,9 @@ html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-
       t.removeAttribute('aria-busy'); bypass = true; try { t.click(); } finally { bypass = false; }
     });
   }, true);
-  function start(){ moveAdded(); if (window.MutationObserver && document.getElementById('omgd')) new MutationObserver(moveAdded).observe(document.getElementById('omgd'), {childList:true, subtree:true}); }
+  /* Card rating tag that has no value prints its raw name ({woo_...}): hide it. */
+  function cleanRatings(){ document.querySelectorAll('.omg-ac-rating').forEach(function(r){ if (/\{[a-z_]+\}/.test(r.textContent)) r.style.display = 'none'; }); }
+  function start(){ moveAdded(); cleanRatings(); if (window.MutationObserver) new MutationObserver(function(){ clearTimeout(cleanRatings.t); cleanRatings.t = setTimeout(cleanRatings, 150); }).observe(document.body, {childList:true, subtree:true}); if (window.MutationObserver && document.getElementById('omgd')) new MutationObserver(moveAdded).observe(document.getElementById('omgd'), {childList:true, subtree:true}); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
