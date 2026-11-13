@@ -2,7 +2,7 @@
 /**
  * Replace the text "OMG / OMGGamer" logos with the OMGGamer logo image.
  *
- *   wp eval-file brand-apply.php                         (store: Bricks header 98 and footer 100)
+ *   wp eval-file brand-apply.php                         (store: every Bricks header/footer template with the text logo)
  *   wp --url=<site>/blogs/ eval-file brand-apply.php     (blog: omg-header, omg-footer, omg-footer-min template parts)
  *
  * The original content is kept in the _omg_brand_backup post meta the first time it runs. Safe to run again.
@@ -23,8 +23,22 @@ $backup = static function (int $id, $value): void {
     }
 };
 
+$admins = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID', 'blog_id' => 1]);
+if ($admins) {
+    wp_set_current_user((int) $admins[0]);
+}
+
 if ((int) get_current_blog_id() === 1) {
-    foreach ([98 => '_bricks_page_header_2', 100 => '_bricks_page_footer_2'] as $pid => $key) {
+    global $wpdb;
+    $targets = $wpdb->get_results(
+        "SELECT m.post_id, m.meta_key, p.post_title, p.post_status FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} p ON p.ID = m.post_id
+         WHERE p.post_type = 'bricks_template' AND m.meta_key IN ('_bricks_page_header_2','_bricks_page_footer_2')
+           AND (m.meta_value LIKE '%omg-logo-%' OR m.meta_value LIKE '%omg-ftr-logo%')"
+    );
+    foreach ($targets as $t) {
+        $pid = (int) $t->post_id;
+        $key = $t->meta_key;
+        WP_CLI::log("Template $pid \"{$t->post_title}\" ({$t->post_status}, $key)");
         $els = get_post_meta($pid, $key, true);
         if (!is_array($els) || !$els) {
             WP_CLI::warning("Template $pid has no $key data; skipped.");
@@ -56,6 +70,16 @@ if ((int) get_current_blog_id() === 1) {
             unset($e);
         }
         update_post_meta($pid, $key, wp_slash($els));
+        wp_cache_delete($pid, 'post_meta');
+        if (get_post_meta($pid, $key, true) != $els) {
+            // Bricks refuses meta writes outside its builder; write the row directly.
+            $wpdb->update($wpdb->postmeta, ['meta_value' => maybe_serialize($els)], ['post_id' => $pid, 'meta_key' => $key]);
+            wp_cache_delete($pid, 'post_meta');
+        }
+        if (get_post_meta($pid, $key, true) != $els) {
+            WP_CLI::error("Template $pid could not be saved.", false);
+            continue;
+        }
         WP_CLI::log("Template $pid: $changed logo element(s) replaced, " . count($drop) . ' removed.');
     }
 } else {
