@@ -99,7 +99,7 @@ if ((int) get_current_blog_id() === 1) {
                 . $img('omg-brand-img' . ($light ? ' omg-brand-img--light' : '')) . '</a><!-- /wp:html -->';
         }, $post->post_content, -1, $n);
         // Earlier runs wrote an absolute http:// URL; make it root-relative.
-        $content = preg_replace('~src="https?://[^"/]+(/wp-content/uploads/omg-brand/)~', 'src="$1', $content, -1, $fixed);
+        $content = preg_replace('~src="https?://[^"]*?(/wp-content/uploads/omg-brand/)~', 'src="$1', $content, -1, $fixed);
         if (!$n && !$fixed) {
             WP_CLI::log("Template part $slug: nothing to change.");
             continue;
