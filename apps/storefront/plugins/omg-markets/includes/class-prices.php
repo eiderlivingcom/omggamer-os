@@ -34,6 +34,9 @@ final class OMG_Markets_Prices
         add_action('wp_enqueue_scripts', [__CLASS__, 'free_game_target'], 999);
         add_action('wp_footer', [__CLASS__, 'chart_symbol'], 5);
         add_filter('rest_post_dispatch', [__CLASS__, 'header'], 99);
+        // Every storefront page shows prices and the market label, so a shared page cache would show one
+        // visitor's currency to everyone. Tell page caches (xSpeed honours DONOTCACHEPAGE) to skip them.
+        add_action('template_redirect', [__CLASS__, 'no_page_cache'], 0);
         // Card templates print "from <strong>${PRO price}</strong> with PRO" with a typed "$".
         add_filter('bricks/frontend/render_data', [__CLASS__, 'pro_symbol'], 99);
         add_action('send_headers', [__CLASS__, 'header']);
@@ -46,6 +49,17 @@ final class OMG_Markets_Prices
         }
         $sym = get_woocommerce_currency_symbol(OMG_Markets::currency());
         return preg_replace('~(class="[^"]*omg-ac-pro-t[^"]*"[^>]*>\s*from\s*<strong>)\$~', '${1}' . $sym, $html);
+    }
+
+    public static function no_page_cache(): void
+    {
+        if (count(OMG_Markets::enabled()) < 2 || get_query_var('omg_feed')) {
+            return;
+        }
+        if (!defined('DONOTCACHEPAGE')) {
+            define('DONOTCACHEPAGE', true);
+        }
+        nocache_headers();
     }
 
     /** X-OMG-Market: the market used for this response, or "base (reason)". */
