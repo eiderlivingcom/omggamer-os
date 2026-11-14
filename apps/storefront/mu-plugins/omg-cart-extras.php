@@ -64,7 +64,7 @@ final class OMG_Cart_Extras
         return array_values($out);
     }
 
-    private static function off(WC_Product $p): float
+    public static function off(WC_Product $p): float
     {
         if ($p->is_type('variable')) {
             $reg = (float) $p->get_variation_regular_price('min');
@@ -76,7 +76,7 @@ final class OMG_Cart_Extras
         return $reg > 0 && $now > 0 && $now < $reg ? 1 - $now / $reg : 0.0;
     }
 
-    private static function card(WC_Product $p): string
+    public static function card(WC_Product $p): string
     {
         $img = wp_get_attachment_image_url($p->get_image_id(), 'woocommerce_thumbnail') ?: wc_placeholder_img_src('woocommerce_thumbnail');
         $off = (int) round(self::off($p) * 100);
@@ -99,25 +99,10 @@ final class OMG_Cart_Extras
             . '<a class="nm" href="' . $url . '">' . $name . '</a><div class="pr">' . $price . '</div>' . $btn . '</li>';
     }
 
-    public static function render(): void
+    /** Card + scroller styles, shared with the archive pages. */
+    public static function card_css(): string
     {
-        if (!function_exists('is_cart') || !is_cart() || !WC()->cart || WC()->cart->is_empty()) {
-            return;
-        }
-        $picks = self::picks();
-        $cards = implode('', array_map([__CLASS__, 'card'], $picks));
-        ?>
-<template id="omg-cart-recs-tpl"><section class="omg-cr" aria-label="You may also like"><button type="button" class="omg-cr-nav prev" aria-label="Scroll left" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><ul class="omg-cr-row"><?php echo $cards; // phpcs:ignore -- escaped above ?></ul><button type="button" class="omg-cr-nav next" aria-label="Scroll right"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></section></template>
-<style id="omg-cart-extras-css">
-/* Items card: the table carries the card so a section can sit under it in the same column. */
-html body .wc-block-cart .wc-block-cart__main{background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
-html body .wc-block-cart .wc-block-cart__main>.wc-block-cart-items{background:#171424;border:1px solid #2a2540!important;border-radius:20px;border-collapse:separate;border-spacing:0;padding:6px 20px 8px;width:100%;box-sizing:border-box}
-html body .wc-block-cart .wc-block-cart__main>.wc-block-cart-items tr:last-child td{border-bottom:0!important}
-/* Sidebar: totals, then payment tiles and the trust strip. */
-html body .wc-block-cart__sidebar .omg-cart-pay{justify-content:center;margin:16px 0 0!important}
-html body .wc-block-cart__sidebar .omg-cart-trust{display:flex!important;flex-direction:column!important;margin:12px 0 0!important;width:100%!important}
-html body .wc-block-cart__sidebar .omg-cart-trust>*{border-left:0!important;border-right:0!important;border-top:1px solid #2a2540!important;justify-content:flex-start!important;width:100%!important;flex:none!important}
-html body .wc-block-cart__sidebar .omg-cart-trust>*:first-child{border-top:0!important}
+        return <<<'CSS'
 /* Suggestions row. */
 .omg-cr{position:relative;margin:20px 0 0}
 .omg-cr-row{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 36px) / 4);gap:12px;margin:0;padding:2px 2px 6px;list-style:none;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
@@ -142,6 +127,29 @@ html body .wc-block-cart__sidebar .omg-cart-trust>*:first-child{border-top:0!imp
 .omg-cr-nav.prev{left:-12px}.omg-cr-nav.next{right:-12px}
 .omg-cr-nav[hidden]{display:none}
 .omg-cr :focus-visible{outline:2px solid #b79cff;outline-offset:2px}
+CSS;
+    }
+
+    public static function render(): void
+    {
+        if (!function_exists('is_cart') || !is_cart() || !WC()->cart || WC()->cart->is_empty()) {
+            return;
+        }
+        $picks = self::picks();
+        $cards = implode('', array_map([__CLASS__, 'card'], $picks));
+        ?>
+<template id="omg-cart-recs-tpl"><section class="omg-cr" aria-label="You may also like"><button type="button" class="omg-cr-nav prev" aria-label="Scroll left" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><ul class="omg-cr-row"><?php echo $cards; // phpcs:ignore -- escaped above ?></ul><button type="button" class="omg-cr-nav next" aria-label="Scroll right"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></section></template>
+<style id="omg-cart-extras-css">
+/* Items card: the table carries the card so a section can sit under it in the same column. */
+html body .wc-block-cart .wc-block-cart__main{background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+html body .wc-block-cart .wc-block-cart__main>.wc-block-cart-items{background:#171424;border:1px solid #2a2540!important;border-radius:20px;border-collapse:separate;border-spacing:0;padding:6px 20px 8px;width:100%;box-sizing:border-box}
+html body .wc-block-cart .wc-block-cart__main>.wc-block-cart-items tr:last-child td{border-bottom:0!important}
+/* Sidebar: totals, then payment tiles and the trust strip. */
+html body .wc-block-cart__sidebar .omg-cart-pay{justify-content:center;margin:16px 0 0!important}
+html body .wc-block-cart__sidebar .omg-cart-trust{display:flex!important;flex-direction:column!important;margin:12px 0 0!important;width:100%!important}
+html body .wc-block-cart__sidebar .omg-cart-trust>*{border-left:0!important;border-right:0!important;border-top:1px solid #2a2540!important;justify-content:flex-start!important;width:100%!important;flex:none!important}
+html body .wc-block-cart__sidebar .omg-cart-trust>*:first-child{border-top:0!important}
+<?php echo self::card_css(); // phpcs:ignore ?>
 @media (max-width:900px){.omg-cr-row{grid-auto-columns:calc((100% - 24px) / 3)}}
 @media (max-width:600px){.omg-cr-row{grid-auto-columns:44%}.omg-cr-nav{display:none!important}html body .wc-block-cart .wc-block-cart__main>.wc-block-cart-items{padding:4px 14px 6px}}
 </style>
