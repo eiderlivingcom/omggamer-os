@@ -102,6 +102,14 @@ final class OMG_SEO
     {
         $s = trim(preg_replace('/\s+/', ' ', html_entity_decode(wp_strip_all_tags($s), ENT_QUOTES, 'UTF-8')));
         if ($max && mb_strlen($s) > $max) {
+            // Drop whole closing sentences first, then cut at a word.
+            $parts = preg_split('/(?<=[.!?])\s+/u', $s);
+            while (count($parts) > 1 && mb_strlen(implode(' ', $parts)) > $max) {
+                array_pop($parts);
+            }
+            $s = implode(' ', $parts);
+        }
+        if ($max && mb_strlen($s) > $max) {
             $s = rtrim(mb_substr($s, 0, $max - 1));
             $s = preg_replace('/\s+\S*$/u', '', $s) . '…';
         }
@@ -524,7 +532,8 @@ final class OMG_SEO
             $f[] = ["Are {$n} keys region locked?", 'Some are. Every product shows its activation region' . ($regions ? ' (for example ' . self::list_text($regions) . ')' : '') . ', and we warn you when it does not match the country you are browsing from. Global keys can be activated anywhere.'];
         }
         $f[] = ["How fast is delivery?", 'Digital products are delivered instantly after payment, to your email and your account dashboard.'];
-        $f[] = ['Is it safe to buy ' . ($t ? $n : 'games') . ' on ' . self::BRAND . '?', 'Yes. Payments are processed securely at checkout, every order is covered by OMG Buyer Protection and our support team is available 24/7 if anything goes wrong.'];
+        $what = !$t ? 'games' : (in_array($tax, ['pa_platform', 'pa_genres', 'pa_developers', 'pa_publishers'], true) ? $n . ' games' : ($tax === 'pa_region' ? $n . ' keys' : $n));
+        $f[] = ['Is it safe to buy ' . $what . ' on ' . self::BRAND . '?', 'Yes. Payments are processed securely at checkout, every order is covered by OMG Buyer Protection and our support team is available 24/7 if anything goes wrong.'];
         if ($pro > 0) {
             $f[] = ['Do OMG PRO members pay less?', 'Yes. PRO members get an extra ' . rtrim(rtrim(number_format($pro, 1), '0'), '.') . '% off member prices on games like these' . ($proPrice ? ". PRO costs {$proPrice} a month and the first month is discounted" : '') . '.'];
         }
@@ -766,6 +775,8 @@ final class OMG_SEO
 .omg-seo-chip .c{color:#77738c;font-size:12px}
 .omg-seo-chip .omg-seo-pf{position:relative!important;top:auto!important;right:auto!important;width:22px!important;height:22px!important;border:0!important;box-shadow:none!important;flex:none}
 .omg-seo-chip .omg-seo-pf::before{width:12px!important;height:12px!important}
+.omg-seo-chip .omg-seo-pf[data-pf^="xbox"]{background:#107c10!important;display:inline-grid!important;place-items:center}
+.omg-seo-chip .omg-seo-pf[data-pf^="xbox"]::before{content:"";background:#fff;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27black%27 stroke-width=%273.2%27 stroke-linecap=%27round%27%3E%3Cpath d=%27M5 4c4 3 10 13 14 16M19 4C15 7 9 17 5 20%27/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27black%27 stroke-width=%273.2%27 stroke-linecap=%27round%27%3E%3Cpath d=%27M5 4c4 3 10 13 14 16M19 4C15 7 9 17 5 20%27/%3E%3C/svg%3E") center/contain no-repeat}
 @media (max-width:1100px){.omg-seo-rel .omg-cr-row{grid-auto-columns:calc((100% - 36px) / 4)}}
 @media (max-width:900px){.omg-seo-grid{grid-template-columns:1fr}.omg-seo-rel .omg-cr-row{grid-auto-columns:calc((100% - 24px) / 3)}}
 @media (max-width:600px){.omg-seo-wrap{padding:0 16px;gap:32px}.omg-seo-rel .omg-cr-row{grid-auto-columns:44%}.omg-cr-nav{display:none!important}.omg-seo-about,.omg-seo-facts{padding:20px}.omg-seo-h2{font-size:20px}.omg-seo-faq summary{font-size:15px;padding:16px}}
