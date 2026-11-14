@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: OMGGamer PRO offer and store rules
- * Description: OMG PRO costs 4.99 USD a month; a customer's first month is always 0.99 USD. Promo codes never apply
+ * Description: OMG PRO costs 6.99 USD a month; a customer's first month is always 0.99 USD. Promo codes never apply
  *              to the PRO membership (they still apply to the other products in the same cart). Also: gift cards use
  *              the digital key page, and the shop lives at /collections/.
  * Version: 1.0.0
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 final class OMG_Pro_Offer
 {
     public const PRODUCT = 1906;
-    public const MONTHLY = 4.99;
+    public const MONTHLY = 6.99;
     public const FIRST = 0.99;
 
     /** Bricks templates: gift card / currency (106) => game key (104). */
