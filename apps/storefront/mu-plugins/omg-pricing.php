@@ -204,7 +204,8 @@ final class OMG_Pricing
             return;
         }
         $pro_id = self::pro_id();
-        $has = function_exists('wcs_user_has_subscription') && is_user_logged_in() && wcs_user_has_subscription(get_current_user_id(), $pro_id, 'active');
+        $has = (class_exists('OMG_Pro_Offer') && OMG_Pro_Offer::is_member())
+            || (function_exists('wcs_user_has_subscription') && is_user_logged_in() && wcs_user_has_subscription(get_current_user_id(), $pro_id, 'active'));
         foreach ($cart->get_cart() as $item) {
             if ((int) $item['product_id'] === $pro_id) {
                 $has = true;
