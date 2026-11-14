@@ -11,6 +11,8 @@ final class OMG_Markets
 {
     public const OPTION = 'omg_markets_settings';
     public const COOKIE = 'omg_market';
+    public const CUR_COOKIE = 'omg_currency';
+    private static $chosen_currency = false;
 
     /** Currencies shown without decimals. */
     private const ZERO_DECIMAL = ['JPY', 'KRW', 'ISK', 'HUF', 'IDR'];
@@ -166,6 +168,9 @@ final class OMG_Markets
         $pick = self::normalise($_GET['market'] ?? null);
         if ($pick) {
             self::remember($pick);
+            if (empty($_GET['currency'])) {
+                self::remember_currency('');
+            }
             return self::$current = $pick;
         }
         $pick = self::normalise($_COOKIE[self::COOKIE] ?? null);
@@ -200,8 +205,66 @@ final class OMG_Markets
 
     public static function market(?string $code = null): array
     {
+        $explicit = (bool) $code;
         $code = $code ?: self::current();
-        return self::settings()['markets'][$code] ?? ['currency' => self::base_currency(), 'markup' => 0, 'rounding' => 'none'];
+        $m = self::settings()['markets'][$code] ?? ['currency' => self::base_currency(), 'markup' => 0, 'rounding' => 'none'];
+        // The visitor may pick a different currency from their country's own (Region, language & currency menu).
+        if ((!$explicit || ($code === self::current() && !self::$forced)) && !self::$forced && self::applies()) {
+            $cur = self::chosen_currency();
+            if ($cur && $cur !== $m['currency']) {
+                $m['currency'] = $cur;
+            }
+        }
+        return $m;
+    }
+
+    /** Currencies a visitor can choose: those of the enabled markets. */
+    public static function currencies(): array
+    {
+        $out = [];
+        foreach (self::enabled() as $m) {
+            $out[$m['currency']] = true;
+        }
+        $out = array_keys($out);
+        sort($out);
+        return $out;
+    }
+
+    /** The visitor's own currency choice, or '' to use their country's currency. */
+    public static function chosen_currency(): string
+    {
+        if (self::$chosen_currency !== false) {
+            return self::$chosen_currency;
+        }
+        $ok = self::currencies();
+        $get = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) ($_GET['currency'] ?? '')));
+        if ($get !== '' && in_array($get, $ok, true)) {
+            self::remember_currency($get);
+            return self::$chosen_currency = $get;
+        }
+        $c = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) ($_COOKIE[self::CUR_COOKIE] ?? '')));
+        return self::$chosen_currency = in_array($c, $ok, true) ? $c : '';
+    }
+
+    private static function remember_currency(string $cur): void
+    {
+        self::$chosen_currency = $cur;
+        if ($cur === '') {
+            unset($_COOKIE[self::CUR_COOKIE]);
+        } else {
+            $_COOKIE[self::CUR_COOKIE] = $cur;
+        }
+        if (headers_sent()) {
+            return;
+        }
+        setcookie(self::CUR_COOKIE, $cur, [
+            'expires' => $cur === '' ? time() - 3600 : time() + 180 * DAY_IN_SECONDS,
+            'path' => COOKIEPATH ?: '/',
+            'domain' => COOKIE_DOMAIN ?: '',
+            'secure' => is_ssl(),
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ]);
     }
 
     public static function currency(?string $code = null): string
