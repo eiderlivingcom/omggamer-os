@@ -106,6 +106,8 @@ html body .omg-pnav.is-deals .omg-pnav-ic{display:none!important}
 }
 @media (max-width:480px){html body #omg-hdr-locale{display:none!important}html body #omg-logo .omg-brand-img{height:30px!important}}
 /* details */
+html body #omg-hdr-search::before,html body #omg-hdr-search>div::before,html body #omg-hdr-search form::before{display:none!important;content:none!important}
+html body #omg-hdr-top{height:auto!important;max-height:none!important}
 html body #omg-hdr-cart::before{background-color:transparent!important;filter:brightness(0) invert(1)}
 html body #omg-hdr-search form>span{display:none!important}
 html body #omg-hdr-search input{background-image:none!important}
