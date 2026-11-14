@@ -33,6 +33,18 @@ final class OMG_Pro_Offer
         add_filter('woocommerce_get_item_data', [__CLASS__, 'item_note'], 20, 2);
         add_filter('bricks/active_templates', [__CLASS__, 'templates'], 30, 3);
         add_action('template_redirect', [__CLASS__, 'shop_redirect'], 1);
+        add_action('wp_enqueue_scripts', [__CLASS__, 'checkout_data'], 100);
+    }
+
+    /** Give the checkout's PRO box the real offer (in the visitor's currency). */
+    public static function checkout_data(): void
+    {
+        if (!wp_script_is('omgx', 'enqueued') && !wp_script_is('omgx', 'registered')) {
+            return;
+        }
+        $c = static fn ($v) => class_exists('OMG_Markets') && OMG_Markets::applies() ? (OMG_Markets::convert($v) ?? $v) : $v;
+        $d = ['proMonthly' => $c(self::MONTHLY), 'proFirst' => self::eligible() ? $c(self::FIRST) : 0];
+        wp_add_inline_script('omgx', 'window.OMGX=window.OMGX||{};Object.assign(window.OMGX,' . wp_json_encode($d) . ');', 'before');
     }
 
     /** First month at 0.99 unless this customer has bought PRO before. */
