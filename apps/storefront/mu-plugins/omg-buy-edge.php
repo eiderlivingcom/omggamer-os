@@ -19,7 +19,7 @@ add_action('wp_footer', static function (): void {
 @property --omg-edge-a{syntax:"<angle>";inherits:false;initial-value:0deg}
 .omg-edge-host{position:relative!important;isolation:isolate;overflow:visible!important}
 .omg-edge{position:absolute;inset:-2px;border-radius:inherit;padding:2px;pointer-events:none;z-index:2;
-  background:conic-gradient(from var(--omg-edge-a),transparent 0deg 250deg,rgba(124,58,237,.0) 250deg,#7C3AED 290deg,#C026D3 320deg,#ff4f9a 345deg,#fff 356deg,transparent 360deg);
+  background:conic-gradient(from var(--omg-edge-a),transparent 0deg 190deg,rgba(124,58,237,0) 190deg,#7C3AED 255deg,#C026D3 305deg,#ff4f9a 340deg,#fff 356deg,transparent 360deg);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
   filter:drop-shadow(0 0 4px rgba(224,17,95,.75)) drop-shadow(0 0 10px rgba(192,38,211,.45));
   animation:omg-edge-run 2.4s linear infinite}
