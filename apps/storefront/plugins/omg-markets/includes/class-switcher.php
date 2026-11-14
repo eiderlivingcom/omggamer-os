@@ -58,8 +58,15 @@ final class OMG_Markets_Switcher
         ?>
 <style id="omg-markets-css">
 #omg-hdr-locale.omg-mk-on,.omgx-loc.omg-mk-on,.omg-mk-btn{cursor:pointer;user-select:none}
-#omg-hdr-locale.omg-mk-on{display:inline-flex!important;align-items:center;gap:6px;border-radius:10px;transition:background .15s}
-#omg-hdr-locale.omg-mk-on:hover{background:#1e1a2e}
+html body #omg-hdr-locale.omg-mk-on{display:inline-flex!important;align-items:center;gap:8px;height:38px;padding:0 10px 0 12px!important;border-radius:999px!important;background:#1e1a2e!important;border:1px solid #2a2540!important;color:#f4f2fb!important;font:600 13px/1 Poppins,system-ui,sans-serif!important;transition:border-color .15s,box-shadow .15s}
+html body #omg-hdr-locale.omg-mk-on:hover,html body #omg-hdr-locale.omg-mk-on[aria-expanded=true]{border-color:#8b5cf6!important;box-shadow:0 0 0 3px rgba(139,92,246,.18)}
+#omg-hdr-locale .omg-mk-cc{color:#a29fb6;letter-spacing:.02em}
+#omg-hdr-locale .omg-mk-sep{width:1px;height:16px;background:#2a2540}
+#omg-hdr-locale .omg-mk-cur{display:inline-flex;align-items:center;gap:4px;color:#f4f2fb}
+#omg-hdr-locale .omg-mk-sym{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 4px;border-radius:6px;background:rgba(139,92,246,.18);color:#c4b5fd;font-size:11px;font-weight:700}
+#omg-hdr-locale .omg-mk-chev{color:#77738c;flex:none}
+#omg-hdr-locale .omg-mk-flag img.emoji{width:20px!important;height:20px!important;border-radius:4px}
+@media (max-width:767px){#omg-hdr-locale .omg-mk-cc,#omg-hdr-locale .omg-mk-sep{display:none}html body #omg-hdr-locale.omg-mk-on{height:34px;padding:0 8px!important}}
 #omg-hdr-locale.omg-mk-on::before{display:none!important}
 #omg-hdr-locale .omg-dot{opacity:.5}
 .omgx-loc.omg-mk-on:hover{opacity:.85}
@@ -184,8 +191,15 @@ html.omg-mk-lock,html.omg-mk-lock body{overflow:hidden}
     el.textContent = '';
     var f = document.createElement('span'); f.className = 'omg-mk-flag'; f.setAttribute('aria-hidden', 'true'); f.textContent = it.flag;
     el.appendChild(f);
-    el.appendChild(document.createTextNode(withName ? C.currency + ' · ' + it.name : it.cc));
-    if (!withName) { var dot = document.createElement('span'); dot.className = 'omg-dot'; dot.textContent = '·'; el.appendChild(dot); el.appendChild(document.createTextNode(C.currency)); }
+    if (withName) { el.appendChild(document.createTextNode(C.currency + ' · ' + it.name)); return; }
+    var cu = curr(C.currency), sym = cu.sym && cu.sym !== cu.code ? cu.sym : '';
+    var cc = document.createElement('span'); cc.className = 'omg-mk-cc'; cc.textContent = it.cc; el.appendChild(cc);
+    var sp = document.createElement('span'); sp.className = 'omg-mk-sep'; sp.setAttribute('aria-hidden', 'true'); el.appendChild(sp);
+    var cr = document.createElement('span'); cr.className = 'omg-mk-cur';
+    if (sym) { var sy = document.createElement('span'); sy.className = 'omg-mk-sym'; sy.setAttribute('aria-hidden', 'true'); sy.textContent = sym; cr.appendChild(sy); }
+    cr.appendChild(document.createTextNode(C.currency)); el.appendChild(cr);
+    el.insertAdjacentHTML('beforeend', '<svg class="omg-mk-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>');
+    el.setAttribute('aria-label', 'Region ' + it.name + ', currency ' + cu.name + '. Change');
   }
   function wire(el, withName){
     if (el.dataset.omgMk) return; el.dataset.omgMk = '1';

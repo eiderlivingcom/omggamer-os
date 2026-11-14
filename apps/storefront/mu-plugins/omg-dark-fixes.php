@@ -55,7 +55,11 @@ final class OMG_Dark_Fixes
             return $m[1] . (is_string($css) ? $css : $m[2]) . $m[3];
         }, $html);
         $html = is_string($out) ? $out : $html;
-        // 2. Payment method rows become logo tiles.
+        // 2. Sections removed from the store (home page stats strip: placeholder numbers).
+        foreach (['omg-stats'] as $id) {
+            $html = self::remove_by_id($html, $id);
+        }
+        // 3. Payment method rows become logo tiles.
         $out = preg_replace_callback('~<div\b([^>]*)>((?:\s*<span>[^<]{1,24}</span>){3,8})\s*~i', static function ($m) {
             $a = $m[1];
             if (!preg_match('~\bomgd-pay\b|\bomg-cart-pay\b|id="omg-dg-pay"~', $a)) {
@@ -65,6 +69,23 @@ final class OMG_Dark_Fixes
             return '<div' . $a . ' aria-label="Payment methods">' . self::tiles();
         }, $html);
         return is_string($out) ? $out : $html;
+    }
+
+    /** Remove the element with this id (and everything inside it) from the HTML. */
+    private static function remove_by_id(string $html, string $id): string
+    {
+        if (!preg_match('~<(div|section)\b[^>]*\bid="' . preg_quote($id, '~') . '"[^>]*>~', $html, $m, PREG_OFFSET_CAPTURE)) {
+            return $html;
+        }
+        $tag = $m[1][0];
+        $start = $m[0][1];
+        $pos = $start + strlen($m[0][0]);
+        $depth = 1;
+        while ($depth > 0 && preg_match('~<(/?)' . $tag . '\b[^>]*>~i', $html, $t, PREG_OFFSET_CAPTURE, $pos)) {
+            $depth += $t[1][0] === '/' ? -1 : 1;
+            $pos = $t[0][1] + strlen($t[0][0]);
+        }
+        return $depth === 0 ? substr($html, 0, $start) . substr($html, $pos) : $html;
     }
 
     public static function tiles(): string
@@ -146,6 +167,8 @@ html body .wc-block-cart .wc-block-cart-item__prices del,html body .wc-block-car
 html body .wc-block-cart .wc-block-cart-item__prices ins,html body .wc-block-cart .wc-block-cart-item__prices ins *{color:#f4f2fb!important;text-decoration:none}
 html body .wc-block-cart .wc-block-components-sale-badge{background:rgba(16,185,129,.14)!important;border:1px solid rgba(16,185,129,.35)!important;color:#6ee7b7!important}
 html body .wc-block-cart .wc-block-components-sale-badge *{color:#6ee7b7!important}
+html body .wc-block-cart .wc-block-components-sale-badge,html body .wc-block-cart .wc-block-components-sale-badge *{font-size:12px!important;font-weight:600!important;line-height:1.3!important}
+@media (max-width:600px){html body .is-next>span.l{display:none!important}html body .omgx-bar,html body .omgx-bar *{max-width:100%}html body.omgx-cart{overflow-x:hidden}html body .wc-block-cart .wc-block-cart-item__product{padding-left:12px!important}html body .wc-block-cart .wc-block-components-product-name{font-size:14px!important}}
 html body .wc-block-cart .wc-block-cart-item__product{padding-left:16px!important}
 html body .wc-block-cart .wc-block-cart-item__total{text-align:right!important;vertical-align:top}
 html body .wc-block-cart .wc-block-cart-item__total-price-and-sale-badge-wrapper{display:flex!important;flex-direction:column;align-items:flex-end;gap:6px}
