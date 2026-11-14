@@ -275,7 +275,12 @@ final class OMG_SEO
                 $price = (float) ($p->is_type('variable') ? $p->get_variation_price('min', true) : wc_get_price_to_display($p));
                 $own_t = trim((string) get_post_meta($p->get_id(), '_omg_seo_title', true));
                 $own_d = trim((string) get_post_meta($p->get_id(), '_omg_seo_description', true));
-                $c['title'] = $own_t ?: self::clean($name, 52) . ($price ? ' – Buy for ' . self::money($price) : ' – Buy Online') . ' | ' . $b;
+                $c['title'] = $own_t ?: self::fit([
+                    $name . ($price ? ' – Buy for ' . self::money($price) : '') . ' | ' . $b,
+                    $name . ($price ? ' – ' . self::money($price) : '') . ' | ' . $b,
+                    $name . ' | ' . $b,
+                    $name,
+                ]);
                 $c['desc'] = $own_d ?: sprintf(
                     'Buy %s%s%s on %s. %sInstant digital delivery, secure checkout, buyer protection and 24/7 support.',
                     $name,
@@ -352,8 +357,8 @@ final class OMG_SEO
             }
         } elseif (is_front_page()) {
             $s = self::stats(null);
-            $c['title'] = "{$b} – Cheap Game Keys, Gaming Accounts & Gift Cards | Instant Delivery";
-            $c['desc'] = 'Buy cheap game keys for Steam, PlayStation, Xbox, Nintendo and Epic, plus gaming accounts and gift cards. ' . number_format_i18n($s['count']) . ' products, instant digital delivery and buyer protection.';
+            $c['title'] = "{$b} – Cheap Game Keys, Accounts & Gift Cards | Instant Delivery";
+            $c['desc'] = 'Cheap game keys for Steam, PlayStation, Xbox, Nintendo and Epic, plus accounts and gift cards. ' . number_format_i18n($s['count']) . ' products, instant delivery.';
             $c['keys'] = ['game keys', 'cheap game keys', 'steam keys', 'playstation games', 'xbox games', 'nintendo eshop', 'gaming accounts', 'gift cards', 'cd keys'];
             $c['url'] = home_url('/');
             if ($s['popular']) {
@@ -367,6 +372,15 @@ final class OMG_SEO
         } elseif (is_404()) {
             $c['title'] = "Page not found | {$b}";
             $c['desc'] = "This page does not exist. Browse game keys, accounts and gift cards on {$b}.";
+        } elseif (is_page('pro')) {
+            $conv = static fn ($v) => class_exists('OMG_Markets') && OMG_Markets::applies() ? (OMG_Markets::convert($v) ?? $v) : $v;
+            $pct = class_exists('OMG_Pricing') ? rtrim(rtrim(number_format((float) (OMG_Pricing::settings()['pro'] ?? 0), 1), '0'), '.') : '';
+            $mo = class_exists('OMG_Pro_Offer') ? self::money($conv(OMG_Pro_Offer::MONTHLY)) : '';
+            $first = class_exists('OMG_Pro_Offer') ? self::money($conv(OMG_Pro_Offer::FIRST)) : '';
+            $c['title'] = "OMG PRO Membership – Member Prices on Every Game | {$b}";
+            $c['desc'] = 'OMG PRO members get ' . ($pct ? "an extra {$pct}% off" : 'member prices on') . ' game keys and accounts' . ($mo ? ", for {$mo} a month" . ($first ? " (first month {$first})" : '') : '') . '. Cancel anytime.';
+            $c['keys'] = ['omg pro', 'game membership', 'cheaper game keys', 'gaming discount membership'];
+            $c['url'] = get_permalink(get_queried_object_id());
         } elseif (is_singular()) {
             $id = get_queried_object_id();
             $title = self::clean(get_the_title($id));
@@ -380,6 +394,18 @@ final class OMG_SEO
         $c['desc'] = self::clean($c['desc'], 160);
         $c['keys'] = array_slice(array_values(array_unique(array_filter(array_map(static fn ($k) => mb_strtolower(self::clean((string) $k)), $c['keys'])))), 0, 12);
         return self::$ctx = $c;
+    }
+
+    /** First candidate that fits a search result title (about 65 characters). */
+    private static function fit(array $candidates, int $max = 66): string
+    {
+        foreach ($candidates as $t) {
+            $t = self::clean($t);
+            if (mb_strlen($t) <= $max) {
+                return $t;
+            }
+        }
+        return self::clean(end($candidates), $max);
     }
 
     public static function title($title)
