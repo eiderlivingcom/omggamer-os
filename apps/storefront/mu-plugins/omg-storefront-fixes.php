@@ -237,7 +237,11 @@ html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-
   }, true);
   /* Card rating tag that has no value prints its raw name ({woo_...}): hide it. */
   function cleanRatings(){ document.querySelectorAll('.omg-ac-rating').forEach(function(r){ if (/\{[a-z_]+\}/.test(r.textContent)) r.style.display = 'none'; }); }
-  function start(){ moveAdded(); cleanRatings(); if (window.MutationObserver) new MutationObserver(function(){ clearTimeout(cleanRatings.t); cleanRatings.t = setTimeout(cleanRatings, 150); }).observe(document.body, {childList:true, subtree:true}); if (window.MutationObserver && document.getElementById('omgd')) new MutationObserver(moveAdded).observe(document.getElementById('omgd'), {childList:true, subtree:true}); }
+  /* Offers heading: "1 seller · from $X" → "from $X" (no seller count for now). */
+  function offersSummary(){ var e = document.getElementById('omg-dg-of-summary'); if (!e) return;
+    var fix = function(){ var h = e.innerHTML, n = h.replace(/^\s*\d+\s+sellers?\s*(?:·|&middot;|-)\s*/i, ''); if (n !== h) e.innerHTML = n; };
+    fix(); if (window.MutationObserver) new MutationObserver(fix).observe(e, {childList:true, characterData:true, subtree:true}); }
+  function start(){ moveAdded(); cleanRatings(); offersSummary(); if (window.MutationObserver) new MutationObserver(function(){ clearTimeout(cleanRatings.t); cleanRatings.t = setTimeout(cleanRatings, 150); }).observe(document.body, {childList:true, subtree:true}); if (window.MutationObserver && document.getElementById('omgd')) new MutationObserver(moveAdded).observe(document.getElementById('omgd'), {childList:true, subtree:true}); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
