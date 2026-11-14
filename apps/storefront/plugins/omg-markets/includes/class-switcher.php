@@ -96,7 +96,7 @@ html body .omg-mk-search input:focus{border-color:#8b5cf6!important;box-shadow:0
 .omg-mk-empty{padding:16px 12px;color:#a29fb6}
 .omg-mk-note{margin:0;color:#77738c;font-size:12px;line-height:1.45}
 .omg-mk-ft{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.omg-mk-ft button{height:48px;border-radius:12px;font:700 15px Poppins,system-ui,sans-serif;cursor:pointer}
+.omg-mk-ft button{display:flex;align-items:center;justify-content:center;text-align:center;padding:0 16px;height:48px;border-radius:12px;font:700 15px Poppins,system-ui,sans-serif;cursor:pointer}
 .omg-mk-cancel{border:1px solid #2a2540;background:transparent;color:#f4f2fb}
 .omg-mk-cancel:hover{background:#1e1a2e}
 .omg-mk-save{border:0;background:linear-gradient(120deg,#7C3AED,#C026D3 52%,#E0115F);color:#fff;box-shadow:0 10px 24px -12px rgba(192,38,211,.7)}

@@ -105,9 +105,9 @@ html body #omg-promo-acc *{color:#f4f2fb!important}
 html body #omg-promo-acc .brxe-text-basic:first-child{color:#f9a8d4!important}
 
 /* Buy box discount: green ribbon tab that hangs over the panel edge with a folded corner. */
-html body #omg-dg .omg-bb-off:not(:empty),html body .omg-bb .omg-bb-off:not(:empty){background:#8fdc6a!important;color:#0b0a12!important;font-weight:700!important;box-shadow:none!important;border-radius:10px 10px 0 10px!important;padding:6px 12px!important;right:-28px!important;overflow:visible!important}
-html body #omg-dg .omg-bb-off:not(:empty)::after,html body .omg-bb .omg-bb-off:not(:empty)::after{content:"";position:absolute;right:0;top:100%;width:0;height:0;border-left:8px solid #4f8f36;border-bottom:8px solid transparent}
-html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-off:not(:empty){position:relative!important;right:auto!important;margin-right:-28px!important}
+html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-off:not(:empty),html body .omg-bb .omg-bb-opt .omg-bb-off:not(:empty){background:#8fdc6a!important;color:#0b0a12!important;font-weight:700!important;box-shadow:none!important;border-radius:10px 10px 0 10px!important;padding:6px 12px!important;right:-28px!important;overflow:visible!important}
+html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-off:not(:empty)::after,html body .omg-bb .omg-bb-opt .omg-bb-off:not(:empty)::after{content:"";position:absolute;right:0;top:100%;width:0;height:0;border-left:8px solid #4f8f36;border-bottom:8px solid transparent}
+html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-off:not(:empty){position:relative!important;right:auto!important;margin-right:-28px!important}
 
 /* Payment method tiles. */
 html body .omg-paytiles{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center}
@@ -129,6 +129,7 @@ html body #omg-dg-ed-cards .omg-ed-card.is-active .omg-ed-price{color:#f4f2fb!im
 
 /* Region dropdown. */
 html body #omg-dg-region.omg-dd-on{position:relative}
+html body #omg-dg-region.omg-dd-on::after,html body #omg-dg-region.omg-dd-on::before{display:none!important}
 html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;opacity:0!important;pointer-events:none!important;width:100%!important}
 .omg-dd-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;height:40px;padding:0 12px 0 14px;border-radius:12px;background:#1e1a2e;border:1px solid #2a2540;color:#f4f2fb;font:500 14px/1 Poppins,system-ui,sans-serif;cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .omg-dd-btn:hover{border-color:#4b3f78}
