@@ -41,7 +41,9 @@ def now() -> datetime:
 
 
 def storefront_currency(sf: Storefront) -> str:
-    return str((sf.configuration or {}).get("currency") or "EUR").upper()
+    cfg = sf.configuration or {}
+    # "currency" is set in OMGGamer OS; "store_currency" is what the connector reports the shop uses.
+    return str(cfg.get("currency") or cfg.get("store_currency") or "EUR").upper()
 
 
 class Rates:
