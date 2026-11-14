@@ -56,7 +56,7 @@ HTML;
         ?>
 /* OMGGamer header: floating rounded bar + platform row (dark scheme). */
 html body #omg-hdr{background:transparent!important;border:0!important;box-shadow:none!important;padding:14px 24px 0!important;backdrop-filter:none!important}
-html body #omg-hdr-top{max-width:1320px!important;margin:0 auto!important;min-height:76px;padding:12px 12px 12px 28px!important;gap:22px!important;background:#06050b!important;border:1px solid #2a2540!important;border-radius:999px!important;box-shadow:0 18px 40px -22px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.04);align-items:center!important;box-sizing:border-box}
+html body #omg-hdr-top{max-width:1320px!important;margin:0 auto!important;min-height:76px;padding:10px 0!important;gap:22px!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;align-items:center!important;box-sizing:border-box}
 html body #omg-logo .omg-brand-img{height:40px!important}
 html body #omg-hdr-search{flex:1 1 auto!important;max-width:none!important;width:auto!important}
 html body #omg-hdr-search form{position:relative}
@@ -79,7 +79,7 @@ html body #omg-hdr-login{height:54px!important;padding:0 34px!important;border-r
 html body #omg-hdr-login:hover{filter:brightness(1.08)}
 html body #omg-hdr-login svg,html body #omg-hdr-login i{display:none!important}
 /* Platform row */
-html body #omg-hdr-nav{max-width:1320px!important;margin:0 auto!important;padding:14px 28px 6px!important;gap:6px 34px!important;border:0!important;background:transparent!important;display:flex!important;align-items:center!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;box-sizing:border-box}
+html body #omg-hdr-nav{max-width:1320px!important;margin:0 auto!important;padding:12px 0 10px!important;gap:6px 34px!important;border:0!important;border-top:1px solid #2a2540!important;background:transparent!important;display:flex!important;align-items:center!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;box-sizing:border-box}
 html body #omg-hdr-nav::-webkit-scrollbar{display:none}
 html body .omg-pnav{display:inline-flex!important;align-items:center;gap:10px;flex:none;height:40px;color:#f4f2fb!important;font:600 16px/1 Poppins,system-ui,sans-serif!important;text-decoration:none!important;white-space:nowrap;opacity:.92;transition:opacity .15s,color .15s}
 html body .omg-pnav:hover{opacity:1;color:#c4b5fd!important}
@@ -94,18 +94,22 @@ html body .omg-pnav.is-deals .omg-pnav-ic{display:none!important}
 /* Tablet and phone */
 @media (max-width:1024px){
   html body #omg-hdr{padding:10px 12px 0!important}
-  html body #omg-hdr-top{border-radius:26px!important;flex-wrap:wrap!important;padding:12px 12px 12px 18px!important;gap:12px!important;min-height:0}
+  html body #omg-hdr-top{flex-wrap:wrap!important;padding:10px 0!important;gap:12px!important;min-height:0}
   html body #omg-logo{order:1}
   html body #omg-hdr-actions{order:2;margin-left:auto;gap:8px!important}
   html body #omg-hdr-search{order:3;flex:1 1 100%!important}
   html body #omg-hdr-search input{height:48px!important}
   html body #omg-hdr-login{height:44px!important;padding:0 18px!important;font-size:15px!important}
-  html body #omg-hdr-nav{padding:10px 8px 4px!important;gap:6px 22px!important}
+  html body #omg-hdr-nav{padding:8px 0 6px!important;gap:6px 22px!important}
   html body .omg-pnav{font-size:14px!important;height:36px}
   html body .omg-pnav.is-deals{margin-left:0}
 }
 @media (max-width:480px){html body #omg-hdr-locale{display:none!important}html body #omg-logo .omg-brand-img{height:30px!important}}
 /* details */
+/* Not sticky: the header scrolls away with the page on every screen size. */
+html body #brx-header,html body #brx-header.sticky,html body #brx-header.brx-sticky,html body #brx-header.scrolling{position:relative!important;top:auto!important;transform:none!important;box-shadow:none!important}
+html body #omg-hdr{padding:6px 24px 0!important}
+@media (max-width:1024px){html body #omg-hdr{padding:6px 16px 0!important}}
 html body #omg-hdr-search::before,html body #omg-hdr-search>div::before,html body #omg-hdr-search form::before{display:none!important;content:none!important}
 html body #omg-hdr-top{height:auto!important;max-height:none!important}
 html body #omg-hdr-cart::before{background-color:transparent!important;filter:brightness(0) invert(1)}
