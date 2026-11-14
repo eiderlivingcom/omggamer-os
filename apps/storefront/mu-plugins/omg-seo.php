@@ -601,7 +601,7 @@ final class OMG_SEO
             }
             $on = $current && $current->term_id === $t->term_id;
             $ic = $icons ? '<span class="omg-pf omg-seo-pf" data-pf="' . esc_attr($t->slug) . '" aria-hidden="true"></span>' : '';
-            $items .= '<li><a class="omg-seo-chip' . ($on ? ' is-on' : '') . '" href="' . esc_url($link) . '"' . ($on ? ' aria-current="page"' : '') . '>' . $ic . esc_html(self::name($t)) . '<span class="c">' . number_format_i18n($t->count) . '</span></a></li>';
+            $items .= '<li><a class="omg-seo-chip' . ($on ? ' is-on' : '') . '" href="' . esc_url($link) . '"' . ($on ? ' aria-current="page"' : '') . '>' . $ic . esc_html(self::name($t)) . '</a></li>';
         }
         return $items ? '<div class="omg-seo-links"><h3>' . esc_html($title) . '</h3><ul>' . $items . '</ul></div>' : '';
     }
