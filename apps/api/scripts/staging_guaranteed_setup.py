@@ -17,8 +17,9 @@ from app.db.session import get_sessionmaker
 from app.pricing.engine import PricingEngine
 
 RULE = {
-    "scope": "global",
-    "scope_value": None,
+    # Same scope as the existing Kinguin rule, higher priority, so this one wins for Kinguin offers.
+    "scope": "supplier",
+    "scope_value": "kinguin",
     "storefront_id": None,
     "priority": 100,
     "markup_percent": Decimal("0"),
@@ -83,6 +84,24 @@ async def main() -> list[str]:
             print(f"  cost {r.cost} {r.cost_currency} -> regular {r.selling_price} sale {r.sale_price} floor {r.floor_price} {r.currency}")
         for i in items:
             i.status, i.attempts, i.last_error = "queued", 0, None
+        # Products already linked to staging with no pending request get a fresh, approved publish request.
+        pending = {
+            i.product_id
+            for i in (
+                await db.execute(
+                    select(PublishingQueueItem).where(
+                        PublishingQueueItem.storefront_id == sf.id,
+                        PublishingQueueItem.status.in_(("queued", "running")),
+                    )
+                )
+            ).scalars()
+        }
+        for pid in set(mapped) - pending:
+            item = PublishingQueueItem(
+                product_id=pid, storefront_id=sf.id, action="upsert", status="queued", approval_status="approved"
+            )
+            db.add(item)
+            items = [*items, item]
         await db.commit()
         return [str(i.id) for i in items]
 
