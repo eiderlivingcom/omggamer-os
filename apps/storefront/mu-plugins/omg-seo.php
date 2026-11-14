@@ -156,7 +156,6 @@ final class OMG_SEO
             $ids = array_values(array_diff($ids, $hidden));
             $in = $ids ? implode(',', $ids) : '0';
             $lookup = $wpdb->prefix . 'wc_product_meta_lookup';
-            $cheap = $ids ? array_map('intval', $wpdb->get_col("SELECT product_id FROM {$lookup} WHERE product_id IN ({$in}) AND min_price > 0 AND stock_status = 'instock' ORDER BY min_price ASC LIMIT 12")) : [];
             $popular = $ids ? array_map('intval', $wpdb->get_col("SELECT product_id FROM {$lookup} WHERE product_id IN ({$in}) AND stock_status = 'instock' ORDER BY total_sales DESC, average_rating DESC, product_id DESC LIMIT 10")) : [];
             $terms = static function (string $tax) use ($wpdb, $in, $ids) {
                 if (!$ids) {
@@ -174,8 +173,7 @@ final class OMG_SEO
             $base = [
                 'ids' => $ids,
                 'count' => count($ids),
-                'cheap' => $cheap,
-                'popular' => $popular,
+                                'popular' => $popular,
                 'genres' => $terms('pa_genres'),
                 'platforms' => $terms('pa_platform'),
                 'regions' => $terms('pa_region'),
@@ -183,22 +181,6 @@ final class OMG_SEO
             ];
             set_transient($cache, $base, 6 * HOUR_IN_SECONDS);
         }
-        // Prices are worked out live (sale rules and the visitor's currency apply).
-        $min = 0.0;
-        $cheapest = null;
-        foreach ($base['cheap'] as $id) {
-            $p = wc_get_product($id);
-            if (!$p || !$p->is_visible()) {
-                continue;
-            }
-            $v = (float) ($p->is_type('variable') ? $p->get_variation_price('min', true) : wc_get_price_to_display($p));
-            if ($v > 0 && ($min === 0.0 || $v < $min)) {
-                $min = $v;
-                $cheapest = $p;
-            }
-        }
-        $base['min'] = $min;
-        $base['cheapest'] = $cheapest;
         return self::$stats[$key] = $base;
     }
 
@@ -300,37 +282,35 @@ final class OMG_SEO
         } elseif (self::is_archive()) {
             $t = self::term();
             $s = self::stats($t);
-            $min = $s['min'] ? self::money($s['min']) : '';
-            $count = number_format_i18n($s['count']);
             if ($t) {
                 $n = self::name($t);
                 $gen = self::names($s['genres'], 3);
                 $plat = self::names($s['platforms'], 3);
                 switch ($t->taxonomy) {
                     case 'pa_platform':
-                        $c['title'] = "{$n} Games & Keys – Cheap {$n} Deals" . ($min ? " from {$min}" : '') . " | {$b}";
-                        $c['desc'] = "Buy {$n} games, keys and gift cards on {$b}: {$count} products" . ($min ? " from {$min}" : '') . ($gen ? ', including ' . self::list_text($gen) . ' games' : '') . '. Instant delivery and buyer protection.';
+                        $c['title'] = "{$n} Games & Keys – Cheap {$n} Deals | {$b}";
+                        $c['desc'] = "Buy {$n} games, keys and gift cards on {$b}" . ($gen ? ', including ' . self::list_text($gen) . ' games' : '') . '. Instant delivery, buyer protection and 24/7 support.';
                         $c['keys'] = ["{$n} games", "{$n} keys", "cheap {$n} games", "buy {$n} games", "{$n} game deals", "{$n} digital code", ...array_map(static fn ($g) => "{$g} {$n} games", $gen)];
                         break;
                     case 'pa_genres':
-                        $c['title'] = "Best {$n} Games – Cheap {$n} Game Keys" . ($min ? " from {$min}" : '') . " | {$b}";
-                        $c['desc'] = "Shop {$count} {$n} games on {$b}" . ($plat ? ' for ' . self::list_text($plat) : '') . ($min ? ", from {$min}" : '') . '. Instant digital delivery, secure checkout and 24/7 support.';
+                        $c['title'] = "Best {$n} Games – Cheap {$n} Game Keys | {$b}";
+                        $c['desc'] = "Shop {$n} games on {$b}" . ($plat ? ' for ' . self::list_text($plat) : '') . '. Instant digital delivery, secure checkout and 24/7 support.';
                         $c['keys'] = ["{$n} games", "best {$n} games", "cheap {$n} games", "{$n} game keys", ...array_map(static fn ($pl) => "{$n} games {$pl}", $plat)];
                         break;
                     case 'pa_region':
-                        $c['title'] = "{$n} Game Keys & Accounts" . ($min ? " – Prices from {$min}" : '') . " | {$b}";
-                        $c['desc'] = "{$count} game keys, accounts and gift cards for the {$n} region on {$b}" . ($min ? ", from {$min}" : '') . '. Check activation regions, get instant delivery and buyer protection.';
+                        $c['title'] = "{$n} Game Keys & Accounts – Cheap {$n} Deals | {$b}";
+                        $c['desc'] = "Game keys, accounts and gift cards for the {$n} region on {$b}. Check activation regions, get instant delivery and buyer protection.";
                         $c['keys'] = ["{$n} game keys", "{$n} region games", "{$n} cd keys", "cheap {$n} games"];
                         break;
                     case 'product_cat':
-                        $c['title'] = "{$n} – Buy Cheap {$n} Online" . ($min ? " from {$min}" : '') . " | {$b}";
-                        $c['desc'] = "Shop {$count} {$n} on {$b}" . ($plat ? ' for ' . self::list_text($plat) : '') . ($min ? ", from {$min}" : '') . '. Instant digital delivery, buyer protection and 24/7 support.';
+                        $c['title'] = "{$n} – Buy Cheap {$n} Online | {$b}";
+                        $c['desc'] = "Shop {$n} on {$b}" . ($plat ? ' for ' . self::list_text($plat) : '') . '. Instant digital delivery, buyer protection and 24/7 support.';
                         $c['keys'] = [$n, "buy {$n}", "cheap {$n}", "{$n} deals", ...array_map(static fn ($pl) => "{$n} {$pl}", $plat)];
                         break;
                     default:
                         $label = self::LABELS[$t->taxonomy] ?? 'Games';
-                        $c['title'] = "{$n} Games – Buy {$n} Game Keys" . ($min ? " from {$min}" : '') . " | {$b}";
-                        $c['desc'] = "{$count} games by {$label} {$n} on {$b}" . ($min ? ", from {$min}" : '') . '. Instant digital delivery and buyer protection.';
+                        $c['title'] = "{$n} Games – Buy {$n} Game Keys | {$b}";
+                        $c['desc'] = "Games by {$label} {$n} on {$b}. Instant digital delivery and buyer protection.";
                         $c['keys'] = ["{$n} games", "{$n} game keys", "buy {$n} games"];
                 }
                 $c['title'] = self::tm($t, 'omg_seo_title') ?: $c['title'];
@@ -342,8 +322,8 @@ final class OMG_SEO
                 $thumb = (int) get_term_meta($t->term_id, 'thumbnail_id', true);
                 $c['image'] = $thumb ? (string) wp_get_attachment_image_url($thumb, 'large') : '';
             } else {
-                $c['title'] = "All Games, Keys & Gift Cards – Shop {$count} Products" . ($min ? " from {$min}" : '') . " | {$b}";
-                $c['desc'] = "Browse {$count} game keys, gaming accounts and gift cards for Steam, PlayStation, Xbox, Nintendo and more on {$b}. Instant delivery and buyer protection.";
+                $c['title'] = "All Games, Keys & Gift Cards – Shop Cheap Games Online | {$b}";
+                $c['desc'] = "Browse game keys, gaming accounts and gift cards for Steam, PlayStation, Xbox, Nintendo and more on {$b}. Instant delivery and buyer protection.";
                 $c['keys'] = ['game keys', 'buy games online', 'cheap games', 'gaming accounts', 'gift cards', 'cd keys'];
                 $c['url'] = wc_get_page_permalink('shop');
             }
@@ -358,7 +338,7 @@ final class OMG_SEO
         } elseif (is_front_page()) {
             $s = self::stats(null);
             $c['title'] = "{$b} – Cheap Game Keys, Accounts & Gift Cards | Instant Delivery";
-            $c['desc'] = 'Cheap game keys for Steam, PlayStation, Xbox, Nintendo and Epic, plus accounts and gift cards. ' . number_format_i18n($s['count']) . ' products, instant delivery.';
+            $c['desc'] = 'Cheap game keys for Steam, PlayStation, Xbox, Nintendo and Epic, plus accounts and gift cards. Instant delivery and buyer protection.';
             $c['keys'] = ['game keys', 'cheap game keys', 'steam keys', 'playstation games', 'xbox games', 'nintendo eshop', 'gaming accounts', 'gift cards', 'cd keys'];
             $c['url'] = home_url('/');
             if ($s['popular']) {
@@ -526,8 +506,6 @@ final class OMG_SEO
     private static function faqs(?WP_Term $t, array $s): array
     {
         $n = $t ? self::name($t) : 'game';
-        $min = $s['min'] ? self::money($s['min']) : '';
-        $cheapest = $s['cheapest'] ? self::clean($s['cheapest']->get_name(), 80) : '';
         $popular = self::product_names($s['popular'], 3);
         $gen = self::names($s['genres'], 4);
         $plat = self::names($s['platforms'], 5);
@@ -538,7 +516,9 @@ final class OMG_SEO
         $tax = $t ? $t->taxonomy : '';
         if ($tax === 'pa_platform') {
             $f[] = ["How do I activate a {$n} key?", self::activation($t)];
-            $f[] = ["How many {$n} products are on " . self::BRAND . '?', 'There are ' . number_format_i18n($s['count']) . " {$n} products available right now" . ($gen ? ', most of them ' . self::list_text($gen) . ' games' : '') . '.'];
+            if ($gen) {
+                $f[] = ["What kind of {$n} games can I buy here?", "Most {$n} titles here are " . self::list_text($gen) . ' games, plus accounts, gift cards and add-ons.'];
+            }
         } elseif ($tax === 'pa_genres') {
             $f[] = ["What are the most popular {$n} games?", $popular ? 'Popular picks right now: ' . self::list_text($popular) . '.' : "Sort this page by popularity to see the most bought {$n} games."];
             if ($plat) {
@@ -551,9 +531,7 @@ final class OMG_SEO
                 $f[] = ["Which platforms are covered in {$n}?", "This page has products for " . self::list_text($plat) . '. Use the platform filter to narrow the list.'];
             }
         }
-        if ($cheapest && $min) {
-            $f[] = ["What is the cheapest {$n} product right now?", "{$cheapest} is the lowest-priced item on this page at {$min}. Prices update with offers, so check back for new deals."];
-        }
+        $f[] = ["How do I find the best {$n} deals?", 'Sort this page by price or discount, and turn on OMG PRO for member prices. Prices update with new offers, so check back often.'];
         if ($tax !== 'pa_region') {
             $f[] = ["Are {$n} keys region locked?", 'Some are. Every product shows its activation region' . ($regions ? ' (for example ' . self::list_text($regions) . ')' : '') . ', and we warn you when it does not match the country you are browsing from. Global keys can be activated anywhere.'];
         }
@@ -585,8 +563,6 @@ final class OMG_SEO
             return wp_kses_post(wpautop($own));
         }
         $n = $t ? self::name($t) : 'games';
-        $count = number_format_i18n($s['count']);
-        $min = $s['min'] ? self::money($s['min']) : '';
         $popular = self::product_names($s['popular'], 3);
         $gen = self::names($s['genres'], 3);
         $plat = self::names($s['platforms'], 4);
@@ -597,18 +573,18 @@ final class OMG_SEO
         }
         $tax = $t ? $t->taxonomy : '';
         if ($tax === 'pa_platform') {
-            $p[] = esc_html("Browse {$count} {$n} products on " . self::BRAND . ', from game keys and accounts to gift cards and add-ons' . ($min ? ", with prices from {$min}" : '') . '. Every order is delivered digitally straight after payment.');
+            $p[] = esc_html("Browse {$n} products on " . self::BRAND . ', from game keys and accounts to gift cards and add-ons. Every order is delivered digitally straight after payment.');
             if ($gen) {
                 $p[] = esc_html("Most {$n} titles here are " . self::list_text($gen) . ' games. Each product page shows its activation region and step-by-step activation, so make sure a key matches your account region before you buy.');
             }
         } elseif ($tax === 'pa_genres') {
-            $p[] = esc_html("Discover {$count} {$n} games" . ($plat ? ' for ' . self::list_text($plat) : '') . ($min ? ", from {$min}" : '') . '. Compare editions, check the region and get your code instantly after payment.');
+            $p[] = esc_html("Discover {$n} games" . ($plat ? ' for ' . self::list_text($plat) : '') . '. Compare editions, check the region and get your code instantly after payment.');
         } elseif ($tax === 'pa_region') {
-            $p[] = esc_html("{$count} products are sold for the {$n} region" . ($min ? ", from {$min}" : '') . ". Region keys only activate in the countries they are made for, so check the region on each product page; we warn you when it does not match your location.");
+            $p[] = esc_html("These products are sold for the {$n} region. Region keys only activate in the countries they are made for, so check the region on each product page; we warn you when it does not match your location.");
         } elseif ($t) {
-            $p[] = esc_html("Shop {$count} {$n}" . ($plat ? ' for ' . self::list_text($plat) : '') . ($min ? ", with prices from {$min}" : '') . '. Digital items are delivered instantly after payment and every order is covered by buyer protection.');
+            $p[] = esc_html("Shop {$n}" . ($plat ? ' for ' . self::list_text($plat) : '') . '. Digital items are delivered instantly after payment and every order is covered by buyer protection.');
         } else {
-            $p[] = esc_html("Browse {$count} game keys, gaming accounts and gift cards" . ($plat ? ' for ' . self::list_text($plat) : '') . ($min ? ", from {$min}" : '') . '. Every digital order is delivered instantly after payment.');
+            $p[] = esc_html("Browse game keys, gaming accounts and gift cards" . ($plat ? ' for ' . self::list_text($plat) : '') . '. Every digital order is delivered instantly after payment.');
         }
         if ($popular) {
             $p[] = esc_html('Popular right now: ' . self::list_text($popular) . '.');
@@ -686,10 +662,7 @@ final class OMG_SEO
         $plat = self::names($s['platforms'], 5);
         $reg = self::names($s['regions'], 4);
 
-        $facts = [['Products', number_format_i18n($s['count'])]];
-        if ($s['min']) {
-            $facts[] = ['Lowest price', self::money($s['min']) . ($s['cheapest'] ? ' · ' . self::clean($s['cheapest']->get_name(), 48) : '')];
-        }
+        $facts = [];
         if ($gen && (!$t || $t->taxonomy !== 'pa_genres')) {
             $facts[] = ['Top genres', implode(', ', $gen)];
         }
@@ -703,13 +676,6 @@ final class OMG_SEO
         $facts[] = ['Buyer protection', 'Included on every order'];
 
         $out = '<section class="omg-seo-block" aria-labelledby="omg-seo-h"><div class="omg-seo-wrap">';
-        // Related products first (shopping intent), then the knowledge block.
-        $rel = class_exists('OMG_Cart_Extras') ? self::related_products($t, $s) : [];
-        if ($rel) {
-            $out .= '<div class="omg-seo-rel"><h2 class="omg-seo-h2">' . ($t ? 'Related products' : 'Biggest discounts') . '</h2><div class="omg-cr"><button type="button" class="omg-cr-nav prev" aria-label="Scroll left" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><ul class="omg-cr-row">'
-                . implode('', array_map(['OMG_Cart_Extras', 'card'], $rel))
-                . '</ul><button type="button" class="omg-cr-nav next" aria-label="Scroll right"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div></div>';
-        }
         $out .= '<div class="omg-seo-grid"><div class="omg-seo-about"><h2 class="omg-seo-h2" id="omg-seo-h">About ' . esc_html($n) . '</h2>' . self::about($t, $s) . '</div>';
         $out .= '<aside class="omg-seo-facts" aria-label="' . esc_attr($n . ' at a glance') . '"><h3>' . esc_html($label) . ' at a glance</h3><dl>';
         foreach ($facts as [$k, $v]) {
@@ -823,7 +789,7 @@ final class OMG_SEO
     public static function term_form($term): void
     {
         wp_nonce_field('omg_seo_term', 'omg_seo_nonce');
-        echo '<tr class="form-field"><th colspan="2"><h2 style="margin:16px 0 0">OMGGamer SEO</h2><p class="description" style="font-weight:400">Leave empty to use the texts built from the catalogue (product count, prices, genres, platforms).</p></th></tr>';
+        echo '<tr class="form-field"><th colspan="2"><h2 style="margin:16px 0 0">OMGGamer SEO</h2><p class="description" style="font-weight:400">Leave empty to use the texts built from the catalogue (genres, platforms, regions).</p></th></tr>';
         foreach (self::FIELDS as $k => $label) {
             $v = (string) get_term_meta($term->term_id, $k, true);
             $area = in_array($k, ['omg_about', 'omg_faq', 'omg_seo_desc'], true);
