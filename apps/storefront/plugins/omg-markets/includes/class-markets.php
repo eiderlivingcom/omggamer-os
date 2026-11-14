@@ -32,7 +32,7 @@ final class OMG_Markets
                 'US' => $m('USD'), 'GB' => $m('GBP'), 'AU' => $m('AUD'), 'CA' => $m('CAD'), 'NZ' => $m('NZD'),
                 'IE' => $m('EUR'), 'DE' => $m('EUR'), 'FR' => $m('EUR'), 'ES' => $m('EUR'), 'IT' => $m('EUR'),
                 'NL' => $m('EUR'), 'IN' => $m('INR'),
-            ],
+            ] + self::europe($m),
             // Product region (pa_region slug) => countries it can be activated in. "*" = everywhere, "" = no feed.
             'regions' => [
                 'global' => '*',
@@ -52,6 +52,28 @@ final class OMG_Markets
                 'hardware' => '1294',
             ],
         ];
+    }
+
+    /** Every European country we sell to (not Russia or Belarus), each in its own currency. */
+    public const EUROPE = [
+        // Euro area and countries that use the euro.
+        'AT' => 'EUR', 'BE' => 'EUR', 'BG' => 'EUR', 'HR' => 'EUR', 'CY' => 'EUR', 'EE' => 'EUR', 'FI' => 'EUR',
+        'FR' => 'EUR', 'DE' => 'EUR', 'GR' => 'EUR', 'IE' => 'EUR', 'IT' => 'EUR', 'LV' => 'EUR', 'LT' => 'EUR',
+        'LU' => 'EUR', 'MT' => 'EUR', 'NL' => 'EUR', 'PT' => 'EUR', 'SK' => 'EUR', 'SI' => 'EUR', 'ES' => 'EUR',
+        'AD' => 'EUR', 'MC' => 'EUR', 'SM' => 'EUR', 'VA' => 'EUR', 'ME' => 'EUR',
+        // Own currencies.
+        'GB' => 'GBP', 'CH' => 'CHF', 'LI' => 'CHF', 'NO' => 'NOK', 'IS' => 'ISK', 'SE' => 'SEK', 'DK' => 'DKK',
+        'PL' => 'PLN', 'CZ' => 'CZK', 'HU' => 'HUF', 'RO' => 'RON', 'TR' => 'TRY', 'AL' => 'ALL', 'BA' => 'BAM',
+        'RS' => 'RSD', 'MK' => 'MKD', 'MD' => 'MDL', 'UA' => 'UAH',
+    ];
+
+    private static function europe(callable $m): array
+    {
+        $out = [];
+        foreach (self::EUROPE as $cc => $cur) {
+            $out[$cc] = $m($cur);
+        }
+        return $out;
     }
 
     public static function settings(): array

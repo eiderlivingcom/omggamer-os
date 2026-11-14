@@ -82,6 +82,9 @@ final class OMG_Dark_Fixes
         if (!self::front()) {
             return;
         }
+        if ((function_exists('is_cart') && is_cart()) || (function_exists('is_checkout') && is_checkout())) {
+            echo '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" id="omg-poppins-css" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">' . "\n";
+        }
         ?>
 <style id="omg-dark-fixes-css">
 /* Rich text from suppliers (descriptions, activation steps): readable on dark. */
@@ -126,6 +129,28 @@ html body .omg-ph-axis{border-top-color:#2a2540!important}
 html body #omg-dg .omg-seg{background:#1e1a2e!important;border:1px solid #2a2540!important}
 html body #omg-dg .omg-seg button{background:transparent!important;color:#a29fb6!important}
 html body #omg-dg .omg-seg button.is-on{background:#2a2540!important;color:#f4f2fb!important}
+
+/* Cart page (block cart): dark cards, readable text, aligned prices. */
+html body .omg-cart-free{background:#171424!important;border:1px solid #2a2540!important;box-shadow:none!important}
+html body .omg-cart-free *{color:#d9d6e8}
+html body .omg-cart-free b,html body .omg-cart-free strong{color:#f4f2fb!important}
+html body .omg-cart-bar{background:#2a2540!important}
+html body .wc-block-cart .wc-block-cart__main,html body .wc-block-cart .wc-block-components-main{background:#171424!important;border:1px solid #2a2540!important;box-shadow:none!important}
+html body .wc-block-cart .wc-block-cart-items th,html body .wc-block-cart .wc-block-cart-items td{border-color:#2a2540!important}
+html body .wc-block-cart .wc-block-cart-items__header span{color:#a29fb6!important}
+html body .wc-block-cart .wc-block-cart__totals-title,html body .wc-block-cart .wc-block-components-panel__button,html body .wc-block-cart .wc-block-components-totals-item__label{color:#f4f2fb!important}
+html body .wc-block-cart .wc-block-components-totals-wrapper,html body .wc-block-cart .wc-block-components-panel{border-color:#2a2540!important}
+html body .wc-block-cart .wc-block-components-product-name{color:#f4f2fb!important}
+html body .wc-block-cart .wc-block-components-product-metadata,html body .wc-block-cart .wc-block-components-product-metadata *{color:#a29fb6!important}
+html body .wc-block-cart .wc-block-cart-item__prices del,html body .wc-block-cart .wc-block-cart-item__prices del *{color:#77738c!important}
+html body .wc-block-cart .wc-block-cart-item__prices ins,html body .wc-block-cart .wc-block-cart-item__prices ins *{color:#f4f2fb!important;text-decoration:none}
+html body .wc-block-cart .wc-block-components-sale-badge{background:rgba(16,185,129,.14)!important;border:1px solid rgba(16,185,129,.35)!important;color:#6ee7b7!important}
+html body .wc-block-cart .wc-block-components-sale-badge *{color:#6ee7b7!important}
+html body .wc-block-cart .wc-block-cart-item__product{padding-left:16px!important}
+html body .wc-block-cart .wc-block-cart-item__total{text-align:right!important;vertical-align:top}
+html body .wc-block-cart .wc-block-cart-item__total-price-and-sale-badge-wrapper{display:flex!important;flex-direction:column;align-items:flex-end;gap:6px}
+html body .wc-block-cart .wc-block-components-formatted-money-amount,html body .wc-block-cart .wc-block-components-totals-item__value{font-family:Poppins,system-ui,sans-serif!important;font-variant-numeric:tabular-nums}
+html body .wc-block-cart,html body .wc-block-cart *:not(.star-rating):not([class*="icon"]){font-family:Poppins,system-ui,sans-serif}
 
 /* Payment method tiles. */
 html body .omg-paytiles{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center}
