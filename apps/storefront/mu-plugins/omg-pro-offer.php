@@ -2,8 +2,8 @@
 /**
  * Plugin Name: OMGGamer PRO offer and store rules
  * Description: OMG PRO costs 6.99 USD a month; a customer's first month is always 0.99 USD. Promo codes never apply
- *              to the PRO membership (they still apply to the other products in the same cart). Also: gift cards use
- *              the digital key page, and the shop lives at /collections/.
+ *              to the PRO membership (they still apply to the other products in the same cart). Also: the shop lives at
+ *              /collections/ (old /shop/ links redirect).
  * Version: 1.0.0
  */
 
@@ -17,9 +17,6 @@ final class OMG_Pro_Offer
     public const MONTHLY = 6.99;
     public const FIRST = 0.99;
 
-    /** Bricks templates: gift card / currency (106) => game key (104). */
-    private const TEMPLATE_SWAP = [106 => 104];
-
     private static $eligible = null;
 
     public static function init(): void
@@ -31,8 +28,6 @@ final class OMG_Pro_Offer
         add_filter('woocommerce_product_is_on_sale', [__CLASS__, 'on_sale'], 20, 2);
         add_filter('woocommerce_coupon_is_valid_for_product', [__CLASS__, 'coupon_product'], 20, 2);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'item_note'], 20, 2);
-        add_filter('bricks/active_templates', [__CLASS__, 'templates'], 30, 3);
-        add_filter('get_post_metadata', [__CLASS__, 'giftcard_layout'], 10, 4);
         add_action('template_redirect', [__CLASS__, 'shop_redirect'], 1);
         add_action('wp_enqueue_scripts', [__CLASS__, 'checkout_data'], 100);
     }
@@ -119,35 +114,6 @@ final class OMG_Pro_Offer
         ];
         $data[] = ['key' => 'Promo codes', 'value' => 'Not applicable to PRO'];
         return $data;
-    }
-
-    /** Gift cards use the digital key page (OMG Product Studio's "digital" layout) unless one is set by hand. */
-    public static function giftcard_layout($value, $object_id, $meta_key, $single)
-    {
-        static $busy = false;
-        if ($meta_key !== '_omg_layout' || $busy || get_post_type($object_id) !== 'product') {
-            return $value;
-        }
-        $busy = true;
-        $own = get_post_meta($object_id, '_omg_layout', true);
-        $gift = has_term('gift-cards', 'product_cat', $object_id);
-        $busy = false;
-        if ($gift && (!$own || $own === 'auto' || $own === 'giftcard')) {
-            return ['digital'];
-        }
-        return $value;
-    }
-
-    public static function templates($active, $post_id = 0, $content_type = '')
-    {
-        if (is_array($active) && !empty($active['content']) && isset(self::TEMPLATE_SWAP[(int) $active['content']])
-            && function_exists('is_product') && is_product()) {
-            $to = self::TEMPLATE_SWAP[(int) $active['content']];
-            if (get_post_status($to) === 'publish') {
-                $active['content'] = $to;
-            }
-        }
-        return $active;
     }
 
     /** Old /shop/ links go to /collections/ (the shop page's new address). */
