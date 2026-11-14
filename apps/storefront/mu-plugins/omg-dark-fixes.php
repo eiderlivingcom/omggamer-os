@@ -93,8 +93,9 @@ html body #omg-dg #omg-dg-tabs .tab-title.brx-open,html body #omg-dg #omg-dg-tab
 html body #omg-dg-note-text,html body #omg-dg-note p,html body #omg-dg-note-text strong{color:#a29fb6!important}
 html body #omg-dg-note-text strong{color:#f4f2fb!important}
 /* White text on coloured chips and pills. */
-html body .omg-chip-sale,html body #omg-dg-disc,html body .omg-pill-grad,html body .omg-ac-pro-p,html body .omg-of-tag,html body .omg-pro-pill{color:#fff!important}
-html body .omg-chip-glass{color:#fff!important;background:rgba(255,255,255,.18)!important}
+html:root body #brx-content .omg-chip-sale.omg-chip-sale,html:root body .omg-chip-sale.omg-chip-sale.omg-chip-sale.omg-chip-sale,html:root body #brx-content #omg-dg-disc,html:root body #omg-dg-disc,html:root body #brx-content .omg-pill-grad.omg-pill-grad,html:root body .omg-pill-grad.omg-pill-grad.omg-pill-grad.omg-pill-grad,html:root body #brx-content .omg-ac-pro-p.omg-ac-pro-p,html:root body .omg-ac-pro-p.omg-ac-pro-p.omg-ac-pro-p.omg-ac-pro-p,html:root body #brx-content .omg-of-tag.omg-of-tag,html:root body .omg-of-tag.omg-of-tag.omg-of-tag.omg-of-tag,html:root body #brx-content .omg-pro-pill.omg-pro-pill,html:root body .omg-pro-pill.omg-pro-pill.omg-pro-pill.omg-pro-pill{color:#fff!important}
+html:root body #brx-content .omg-chip-glass.omg-chip-glass,html:root body .omg-chip-glass.omg-chip-glass.omg-chip-glass.omg-chip-glass{color:#fff!important;background:rgba(255,255,255,.18)!important}
+html body #omg-hdr-locale .omg-dot{opacity:1!important;color:#77738c!important}
 html body .omg-mb-tag>b{color:#c4b5fd!important}
 html body .omgx-steps .is-next .n,html body .omgx-steps .is-next .l,html body .is-next>span.n,html body .is-next>span.l{color:#8f8aa8!important}
 /* Gradient headline words keep their gradient. */
