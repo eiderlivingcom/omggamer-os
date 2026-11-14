@@ -52,7 +52,7 @@ const BULK: { action: string; label: string; perm: string; confirm?: string }[] 
 const REASONS: Record<string, string> = {
   has_content: "already have AI content",
   already_queued: "already queued",
-  not_approved: "are not approved",
+  not_approved: "need approval first (your role cannot approve)",
   already_approved: "already approved",
   already_archived: "already archived",
   nothing_to_reject: "had nothing to reject",

@@ -250,6 +250,8 @@ class Publisher:
 
             digest = payload_checksum(payload)
             if mapping and mapping.last_hash == digest and mapping.sync_status == "synced":
+                # The store already has exactly this version: the product is live there.
+                product.product_status = "published"
                 item.status = "completed"
                 item.last_error = None
                 db.add(

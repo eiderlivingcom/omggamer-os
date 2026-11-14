@@ -101,7 +101,7 @@ export default function ProductPage() {
     try {
       const r = await api<BulkResult>("/catalogue/products/bulk", { method: "POST", json: { action, product_ids: [id] } });
       const why = Object.keys(r.details).join(", ").replace(/_/g, " ");
-      setNotice(r.changed ? "Done." : `Nothing changed${why ? ` (${why})` : ""}.`);
+      setNotice(r.changed ? (action === "publish" ? "Queued for publishing. It shows as Published once WooCommerce confirms it (Publishing tab)." : "Done.") : `Nothing changed${why ? ` (${why})` : ""}.`);
       await load();
       if (tab === "ai") setVersions(await api<Content[]>(`/catalogue/products/${id}/content`));
     } catch (e) {
@@ -150,7 +150,11 @@ export default function ProductPage() {
           {can("publishing:approve") && <Button disabled={busy} onClick={() => act("approve")}>Approve</Button>}
           {can("publishing:approve") && <Button variant="ghost" disabled={busy} onClick={() => act("reject")}>Reject</Button>}
           {can("publishing:manage") && (
-            <Button variant="ghost" disabled={busy || !["approved", "published", "unpublished"].includes(p.product_status)} onClick={() => act("publish", "Queue this product for publishing to WooCommerce?")}>
+            <Button
+              variant="ghost"
+              disabled={busy || !(["approved", "published", "unpublished"].includes(p.product_status) || (["draft", "review"].includes(p.product_status) && can("publishing:approve")))}
+              onClick={() => act("publish", ["draft", "review"].includes(p.product_status) ? "Approve this product and queue it for publishing to WooCommerce?" : "Queue this product for publishing to WooCommerce?")}
+            >
               Publish
             </Button>
           )}

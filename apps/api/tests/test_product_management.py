@@ -139,15 +139,18 @@ async def test_bulk_actions(
     regen = await bulk("regenerate_ai", [ids["1002"]])
     assert regen["changed"] == 1
 
+    # Publishing a draft approves it in the same step (the user may approve) and queues it.
     pub = await bulk("publish", [ids["1003"]])
-    assert pub["changed"] == 0 and pub["details"] == {"not_approved": 1}
+    assert pub["changed"] == 1 and pub["details"] == {}
+    async with get_sessionmaker()() as db:
+        assert (await db.get(Product, uuid.UUID(ids["1003"]))).product_status == "approved"
     ok = await bulk("approve", [ids["1002"], ids["1003"]])
-    assert ok["changed"] == 2
+    assert ok["changed"] == 1 and ok["details"] == {"already_approved": 1}
     async with get_sessionmaker()() as db:
         c = (await db.execute(select(ProductContent))).scalar_one()
         assert c.content_status == "approved"
     pub = await bulk("publish", [ids["1002"], ids["1003"]])
-    assert pub["changed"] == 2 and len(queued["publish"]) == 2
+    assert pub["changed"] == 1 and pub["details"] == {"already_queued": 1} and len(queued["publish"]) == 2
     async with get_sessionmaker()() as db:
         items = (await db.execute(select(PublishingQueueItem, Storefront.code).join(Storefront))).all()
         assert {code for _, code in items} == {"omggamer-staging"}  # staging is the safe default
