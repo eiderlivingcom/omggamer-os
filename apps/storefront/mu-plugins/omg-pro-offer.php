@@ -133,7 +133,7 @@ final class OMG_Pro_Offer
         $gift = has_term('gift-cards', 'product_cat', $object_id);
         $busy = false;
         if ($gift && (!$own || $own === 'auto' || $own === 'giftcard')) {
-            return $single ? ['digital'] : [['digital']];
+            return ['digital'];
         }
         return $value;
     }
