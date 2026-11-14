@@ -171,9 +171,73 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
         if (!self::front()) {
             return;
         }
+        $money = function_exists('get_woocommerce_currency_symbol') ? [
+            'sym' => html_entity_decode(get_woocommerce_currency_symbol()),
+            'fmt' => get_woocommerce_price_format(),
+            'dec' => wc_get_price_decimals(),
+            'ds' => wc_get_price_decimal_separator(),
+            'ts' => wc_get_price_thousand_separator(),
+        ] : null;
         ?>
 <script id="omg-dark-fixes-js">
 (function(){
+  var M = <?php echo wp_json_encode($money); ?>;
+  function money(v){
+    if (!M) return String(v);
+    var n = Number(v).toFixed(M.dec).split('.'); n[0] = n[0].replace(/\B(?=(\d{3})+(?!\d))/g, M.ts);
+    return M.fmt.replace('%1$s', M.sym).replace('%2$s', n.join(M.ds)).replace(/&nbsp;/g, ' ');
+  }
+  /* Products without editions (gift cards: region + amount): region dropdown and one card per amount. */
+  function optionCards(){
+    var ed = document.getElementById('omg-dg-ed'), wrap = document.getElementById('omg-dg-ed-cards'), holder = document.getElementById('omg-dg-region');
+    var form = document.querySelector('form.variations_form');
+    if (!ed || !wrap || !form || wrap.querySelector('.omg-ed-card')) return;
+    var vars = []; try { vars = JSON.parse(form.getAttribute('data-product_variations') || '[]'); } catch (e) {}
+    if (!vars || !vars.length) return;
+    var sels = Array.prototype.slice.call(form.querySelectorAll('select[name^="attribute_"]'));
+    var rg = sels.filter(function(x){ return /region/.test(x.name); })[0] || null;
+    var opt = sels.filter(function(x){ return x !== rg; })[0] || null;
+    var set = function(sel, v){ if (sel && sel.value !== v) { sel.value = v; if (window.jQuery) jQuery(sel).trigger('change'); else sel.dispatchEvent(new Event('change', {bubbles: true})); } };
+    var labelEl = document.getElementById('omg-dg-ed-label');
+    if (rg && holder && !holder.querySelector('select')) {
+      if (labelEl) labelEl.textContent = 'Region';
+      var rs = document.createElement('select'); rs.setAttribute('aria-label', 'Region');
+      Array.prototype.forEach.call(rg.options, function(o){ if (o.value) rs.appendChild(new Option(o.textContent, o.value, false, o.value === rg.value)); });
+      holder.appendChild(rs);
+      if (!rg.value && rs.value) set(rg, rs.value);
+      rs.addEventListener('change', function(){ set(rg, rs.value); price(); });
+    }
+    if (!opt) return;
+    var lab = form.querySelector('label[for="' + opt.id + '"]'); var attrName = lab ? lab.textContent.trim() : '';
+    var title = (document.querySelector('h1') || {}).textContent || '';
+    var unitM = title.match(/\d[\d,.]*\s+([A-Za-z][A-Za-z-]+)/); var unit = unitM ? unitM[1] : '';
+    var cards = [];
+    Array.prototype.forEach.call(opt.options, function(o){
+      if (!o.value) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'omg-ed-card'; b.setAttribute('data-value', o.value);
+      b.innerHTML = '<span class="omg-ed-name"></span><span class="omg-radio"></span><span class="omg-ed-sub"></span><span class="omg-ed-price"></span>';
+      b.querySelector('.omg-ed-name').textContent = o.textContent.trim() + (unit && !/[A-Za-z]/.test(o.textContent) ? ' ' + unit : '');
+      b.querySelector('.omg-ed-sub').textContent = attrName || 'Option';
+      b.addEventListener('click', function(){ if (!b.classList.contains('is-disabled')) { set(opt, o.value); mark(); } });
+      wrap.appendChild(b); cards.push(b);
+    });
+    function price(){
+      var r = rg ? rg.value : '';
+      cards.forEach(function(c){
+        var v = c.getAttribute('data-value'), min = null;
+        vars.forEach(function(x){ var a = x.attributes || {}; if ((!a[opt.name] || a[opt.name] === v) && (!rg || !r || !a[rg.name] || a[rg.name] === r) && x.is_in_stock && x.is_purchasable !== false) min = min === null ? x.display_price : Math.min(min, x.display_price); });
+        c.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
+        c.classList.toggle('is-disabled', min === null);
+      });
+    }
+    function mark(){ cards.forEach(function(c){ var on = c.getAttribute('data-value') === opt.value; c.classList.toggle('is-active', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); }); }
+    if (!opt.value) {
+      var pick = cards.filter(function(c){ return new RegExp('(^|\\D)' + c.getAttribute('data-value') + '(\\D|$)').test(title); })[0] || cards[0];
+      if (pick) set(opt, pick.getAttribute('data-value'));
+    }
+    opt.addEventListener('change', mark);
+    price(); mark();
+  }
   var globe = '<svg class="g" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
   var chev = '<svg class="c" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   function dropdown(wrap){
@@ -216,6 +280,7 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     render();
   }
   function start(){
+    try { optionCards(); } catch (e) {}
     document.querySelectorAll('#omg-dg-region').forEach(dropdown);
     // Gradient words whose fill was flattened to a solid colour.
     document.querySelectorAll('h1 span,h1 b,h2 span,h2 b,span > b,.omg-404-code').forEach(function(e){
