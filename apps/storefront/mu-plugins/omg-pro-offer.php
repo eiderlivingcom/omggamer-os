@@ -32,6 +32,7 @@ final class OMG_Pro_Offer
         add_filter('woocommerce_coupon_is_valid_for_product', [__CLASS__, 'coupon_product'], 20, 2);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'item_note'], 20, 2);
         add_filter('bricks/active_templates', [__CLASS__, 'templates'], 30, 3);
+        add_filter('get_post_metadata', [__CLASS__, 'giftcard_layout'], 10, 4);
         add_action('template_redirect', [__CLASS__, 'shop_redirect'], 1);
         add_action('wp_enqueue_scripts', [__CLASS__, 'checkout_data'], 100);
     }
@@ -118,6 +119,23 @@ final class OMG_Pro_Offer
         ];
         $data[] = ['key' => 'Promo codes', 'value' => 'Not applicable to PRO'];
         return $data;
+    }
+
+    /** Gift cards use the digital key page (OMG Product Studio's "digital" layout) unless one is set by hand. */
+    public static function giftcard_layout($value, $object_id, $meta_key, $single)
+    {
+        static $busy = false;
+        if ($meta_key !== '_omg_layout' || $busy || get_post_type($object_id) !== 'product') {
+            return $value;
+        }
+        $busy = true;
+        $own = get_post_meta($object_id, '_omg_layout', true);
+        $gift = has_term('gift-cards', 'product_cat', $object_id);
+        $busy = false;
+        if ($gift && (!$own || $own === 'auto' || $own === 'giftcard')) {
+            return $single ? ['digital'] : [['digital']];
+        }
+        return $value;
     }
 
     public static function templates($active, $post_id = 0, $content_type = '')

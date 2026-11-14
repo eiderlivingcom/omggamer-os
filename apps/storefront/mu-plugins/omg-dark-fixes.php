@@ -121,6 +121,11 @@ html body .omg-ph-stat>span{color:#a29fb6!important}
 html body .omg-ph-stat.is-now>span{color:#c4b5fd!important}
 html body .omg-ph-stat.is-low>span{color:#6ee7b7!important}
 html body .omg-ph-stat strong{color:#f4f2fb!important}
+html body .omg-ph-chart{background-image:linear-gradient(#2a2540 1px,transparent 1px)!important}
+html body .omg-ph-axis{border-top-color:#2a2540!important}
+html body #omg-dg .omg-seg{background:#1e1a2e!important;border:1px solid #2a2540!important}
+html body #omg-dg .omg-seg button{background:transparent!important;color:#a29fb6!important}
+html body #omg-dg .omg-seg button.is-on{background:#2a2540!important;color:#f4f2fb!important}
 
 /* Payment method tiles. */
 html body .omg-paytiles{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center}
