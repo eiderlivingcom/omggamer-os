@@ -106,9 +106,21 @@ html body #omg-promo-acc *{color:#f4f2fb!important}
 html body #omg-promo-acc .brxe-text-basic:first-child{color:#f9a8d4!important}
 
 /* Buy box discount: green ribbon tab that hangs over the panel edge with a folded corner. */
-html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-off:not(:empty),html body .omg-bb .omg-bb-opt .omg-bb-off:not(:empty){background:#8fdc6a!important;color:#0b0a12!important;font-weight:700!important;box-shadow:none!important;border-radius:10px 10px 0 10px!important;padding:6px 12px!important;right:-28px!important;overflow:visible!important}
-html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-off:not(:empty)::after,html body .omg-bb .omg-bb-opt .omg-bb-off:not(:empty)::after{content:"";position:absolute;right:0;top:100%;width:0;height:0;border-left:8px solid #4f8f36;border-bottom:8px solid transparent}
+html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-off:not(:empty),html body .omg-bb .omg-bb-opt .omg-bb-off:not(:empty){background:linear-gradient(120deg,#7C3AED,#C026D3 52%,#E0115F)!important;color:#fff!important;font-weight:700!important;box-shadow:0 6px 14px -4px rgba(192,38,211,.45)!important;border-radius:10px 10px 0 10px!important;padding:6px 12px!important;right:-28px!important;overflow:visible!important}
+html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-off:not(:empty)::after,html body .omg-bb .omg-bb-opt .omg-bb-off:not(:empty)::after{content:"";position:absolute;right:0;top:100%;width:0;height:0;border-left:8px solid #7a0f3d;border-bottom:8px solid transparent}
 html body #omg-dg #omg-dg-buy .omg-bb .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-off:not(:empty){position:relative!important;right:auto!important;margin-right:-28px!important}
+
+/* Language/feature chips: the extra ones shown by "+N more" line up with the rest. */
+html body .omg-dg-chips.is-open .omg-dg-chip.is-extra{display:flex!important;align-items:center}
+html body .omg-dg-chips .omg-dg-chip>.brxe-text-basic{display:block!important;line-height:1.2!important}
+/* Price history: stat cards and chart on dark. */
+html body #omg-dg .omg-ph-stat,html body .omg-ph-stat{background:#1e1a2e!important;border:1px solid #2a2540!important}
+html body .omg-ph-stat.is-now{background:rgba(139,92,246,.12)!important;border-color:rgba(139,92,246,.4)!important}
+html body .omg-ph-stat.is-low{background:rgba(16,185,129,.10)!important;border-color:rgba(16,185,129,.35)!important}
+html body .omg-ph-stat>span{color:#a29fb6!important}
+html body .omg-ph-stat.is-now>span{color:#c4b5fd!important}
+html body .omg-ph-stat.is-low>span{color:#6ee7b7!important}
+html body .omg-ph-stat strong{color:#f4f2fb!important}
 
 /* Payment method tiles. */
 html body .omg-paytiles{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center}

@@ -23,8 +23,8 @@ final class OMG_Header
 <a class="omg-pnav" href="/platform/nintendo/"><span class="omg-pf omg-pnav-ic" data-pf="nintendo" aria-hidden="true"></span>Nintendo</a>
 <a class="omg-pnav" href="/platform/epic-games/"><span class="omg-pf omg-pnav-ic" data-pf="epic-games" aria-hidden="true"></span>Epic Games</a>
 <a class="omg-pnav" href="/collections/gift-cards/"><span class="omg-pnav-ic is-gift" aria-hidden="true"></span>Gift cards</a>
-<a class="omg-pnav" href="/shop/"><span class="omg-pnav-ic is-all" aria-hidden="true"></span>Discover all</a>
-<a class="omg-pnav is-deals" href="/shop/?on_sale=1"><span class="omg-pnav-ic" aria-hidden="true"></span>Today's deals</a>
+<a class="omg-pnav" href="/collections/"><span class="omg-pnav-ic is-all" aria-hidden="true"></span>Discover all</a>
+<a class="omg-pnav is-deals" href="/collections/?on_sale=1"><span class="omg-pnav-ic" aria-hidden="true"></span>Today's deals</a>
 </nav>
 HTML;
         return str_replace('href="/', 'href="' . esc_url($home) . '/', $nav);
@@ -34,6 +34,7 @@ HTML;
     {
         add_filter('bricks/frontend/render_data', [__CLASS__, 'swap_nav'], 20, 3);
         add_action('wp_head', [__CLASS__, 'css'], 130);
+        add_action('wp_head', [__CLASS__, 'platform_css'], 129);
         add_action('wp_footer', [__CLASS__, 'fallback'], 5);
     }
 
@@ -45,6 +46,18 @@ HTML;
         }
         $out = preg_replace('~<nav[^>]*id="omg-hdr-nav"[^>]*>.*?</nav>~s', self::nav(), $html, 1);
         return is_string($out) ? $out : $html;
+    }
+
+    /** Platform badge logos (.omg-pf): every page needs them for the header row, not only product templates. */
+    public static function platform_css(): void
+    {
+        if (is_admin()) {
+            return;
+        }
+        $f = WP_CONTENT_DIR . '/uploads/omg-brand/omg-platforms.css';
+        if (is_readable($f)) {
+            echo '<link rel="stylesheet" id="omg-platforms-css" href="' . esc_url(content_url('uploads/omg-brand/omg-platforms.css')) . '?v=' . (int) filemtime($f) . '" media="all">' . "\n";
+        }
     }
 
     public static function css(): void
