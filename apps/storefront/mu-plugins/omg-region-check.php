@@ -88,6 +88,7 @@ final class OMG_Region_Check
             'custom' => trim(wp_strip_all_tags((string) get_post_meta($product->get_id(), 'omg_region_warning', true))),
         ];
         ?>
+<style>.omg-rw-box{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:14px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);box-sizing:border-box;width:100%}.omg-rw-box[hidden]{display:none}.omg-rw-box p{margin:0;font-size:13px;line-height:1.45;color:#fbbf24}.omg-rw-box #omg-dg-warning-title{font-weight:600}</style>
 <script id="omg-region-check">
 (function(){
   var C = <?php echo wp_json_encode($cfg); ?>;
@@ -97,9 +98,16 @@ final class OMG_Region_Check
     return C.product || [];
   }
   function paint(){
-    var box = document.getElementById('omg-dg-warning'); if (!box) return;
     var s = slugs(), known = s.filter(function(x){ return C.regions[x]; });
     var ok = !C.country || !known.length || known.some(function(x){ return C.regions[x].ok; });
+    var box = document.getElementById('omg-dg-warning');
+    if (!box) {
+      if (ok) return;
+      var hero = document.getElementById('omg-dg-hero'); if (!hero) return;
+      box = document.createElement('div'); box.id = 'omg-dg-warning'; box.className = 'omg-rw-box';
+      box.innerHTML = '<p id="omg-dg-warning-title"></p><p id="omg-dg-warning-text"></p>';
+      hero.insertAdjacentElement('afterend', box);
+    }
     box.hidden = ok;
     if (ok) return;
     var name = known.map(function(x){ return C.regions[x].name; }).join(', ');
