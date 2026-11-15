@@ -15,3 +15,11 @@ SELECT p.updated_at::timestamp(0), left(p.canonical_title, 50), p.product_status
 SELECT l.created_at::timestamp(0), l.operation, l.status, left(p.canonical_title, 40), left(l.response::text, 160) FROM sync_logs l LEFT JOIN products p ON p.id = l.product_id ORDER BY l.created_at DESC LIMIT 10;
 \echo '== product status counts'
 SELECT product_status, count(*) FROM products GROUP BY 1 ORDER BY 2 DESC;
+\echo '== variant platforms'
+SELECT platform, count(*) FROM product_variants GROUP BY 1 ORDER BY 2 DESC LIMIT 40;
+\echo '== variant regions'
+SELECT region, count(*) FROM product_variants GROUP BY 1 ORDER BY 2 DESC LIMIT 60;
+\echo '== activation types'
+SELECT activation_type, count(*) FROM product_variants GROUP BY 1 ORDER BY 2 DESC;
+\echo '== suppliers'
+SELECT code, name, status, integration_type FROM suppliers;
