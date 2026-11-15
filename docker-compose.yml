@@ -79,10 +79,11 @@ services:
     restart: unless-stopped
     environment:
       API_INTERNAL_URL: http://api:8000
-    # Staff door (apps/web/src/middleware.ts): OS_DOOR_KEY and optional OS_ALLOWED_IPS live in .env.door on the
-    # server (not in git, not in xCloud's .env). Created by apps/api/scripts/os-door.sh. No file = door off.
+    # Staff door (apps/web/src/middleware.ts): OS_DOOR_KEY and optional OS_ALLOWED_IPS live in
+    # /etc/omggamer-os/door.env on the server, outside the app folder because deploys reset that folder.
+    # Created by apps/api/scripts/os-door.sh. No file = door off.
     env_file:
-      - path: .env.door
+      - path: /etc/omggamer-os/door.env
         required: false
     ports:
       - "127.0.0.1:3100:3000"
