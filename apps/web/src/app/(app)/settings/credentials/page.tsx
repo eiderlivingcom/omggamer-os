@@ -14,7 +14,7 @@ const STATUS: Record<string, Status> = {
   not_configured: { tone: "muted", label: "Not set" },
 };
 
-function ConnectionRow({ c, active, onSaved }: { c: Connection; active: boolean; onSaved: () => Promise<void> }) {
+function ConnectionRow({ code, hint, c, active, onSaved }: { code: string; hint: string; c: Connection; active: boolean; onSaved: () => Promise<void> }) {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState<"save" | "test" | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
@@ -25,9 +25,9 @@ function ConnectionRow({ c, active, onSaved }: { c: Connection; active: boolean;
     setBusy("save");
     setMsg(null);
     try {
-      await api("/suppliers/kinguin/connection", { method: "PUT", json: { environment: c.environment, api_key: key } });
+      await api(`/suppliers/${code}/connection`, { method: "PUT", json: { environment: c.environment, api_key: key } });
       setKey("");
-      const t = await api<{ ok: boolean; message: string }>("/suppliers/kinguin/connection/test", { method: "POST", json: { environment: c.environment } });
+      const t = await api<{ ok: boolean; message: string }>(`/suppliers/${code}/connection/test`, { method: "POST", json: { environment: c.environment } });
       setMsg({ tone: t.ok ? "ok" : "bad", text: t.ok ? `Saved. ${t.message}` : `Saved, but the test failed: ${t.message}` });
       await onSaved();
     } catch (err) {
@@ -41,7 +41,7 @@ function ConnectionRow({ c, active, onSaved }: { c: Connection; active: boolean;
     setBusy("test");
     setMsg(null);
     try {
-      const t = await api<{ ok: boolean; message: string }>("/suppliers/kinguin/connection/test", { method: "POST", json: { environment: c.environment } });
+      const t = await api<{ ok: boolean; message: string }>(`/suppliers/${code}/connection/test`, { method: "POST", json: { environment: c.environment } });
       setMsg({ tone: t.ok ? "ok" : "bad", text: t.message });
       await onSaved();
     } catch (err) {
@@ -67,7 +67,7 @@ function ConnectionRow({ c, active, onSaved }: { c: Connection; active: boolean;
             type="password"
             autoComplete="off"
             spellCheck={false}
-            placeholder={c.configured ? "•••••••• stored — enter a new key to replace it" : "Paste the key from Kinguin → My Stores"}
+            placeholder={c.configured ? "•••••••• stored — enter a new key to replace it" : hint}
             value={key}
             onChange={(e) => setKey(e.target.value)}
             minLength={8}
@@ -143,73 +143,85 @@ function OpenAiCard() {
   );
 }
 
-export default function CredentialsPage() {
-  const { can } = useSession();
+const SUPPLIERS: { code: string; title: string; hint: string; sandbox: boolean }[] = [
+  { code: "kinguin", title: "Kinguin eCommerce API", hint: "Paste the key from Kinguin → My Stores", sandbox: true },
+  { code: "foxreload", title: "Foxreload Public API", hint: "Paste the key from the Foxreload app (API keys)", sandbox: false },
+];
+
+function SupplierCard({ code, title, hint, sandbox }: { code: string; title: string; hint: string; sandbox: boolean }) {
   const [data, setData] = useState<SupplierConnections | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setData(await api<SupplierConnections>("/suppliers/kinguin/connection"));
+      setData(await api<SupplierConnections>(`/suppliers/${code}/connection`));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load connections.");
     }
-  }, []);
+  }, [code]);
 
   useEffect(() => {
-    if (can("credentials:manage")) void load();
-  }, [can, load]);
-
-  if (!can("credentials:manage")) return <Notice>Only a Super Admin can manage API credentials.</Notice>;
+    void load();
+  }, [load]);
 
   async function switchEnv(environment: Environment) {
     setError(null);
     try {
-      setData(await api<SupplierConnections>("/suppliers/kinguin/environment", { method: "PUT", json: { environment } }));
+      setData(await api<SupplierConnections>(`/suppliers/${code}/environment`, { method: "PUT", json: { environment } }));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not switch environment.");
     }
   }
 
+  const rows = data ? data.connections.filter((c) => sandbox || c.environment === "live") : [];
+  return (
+    <Card
+      title={title}
+      aside={
+        data && sandbox && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-ink-700">
+            Imports use
+            <select
+              className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm"
+              value={data.active_environment}
+              onChange={(e) => switchEnv(e.target.value as Environment)}
+            >
+              <option value="live">Production</option>
+              <option value="sandbox">Sandbox</option>
+            </select>
+          </label>
+        )
+      }
+    >
+      {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
+      {!data ? (
+        <div className="h-32 animate-pulse rounded-lg bg-ink-50" />
+      ) : (
+        <div className="divide-y divide-ink-100">
+          {rows.map((c) => (
+            <ConnectionRow key={c.environment} code={code} hint={hint} c={c} active={c.environment === data.active_environment} onSaved={load} />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export default function CredentialsPage() {
+  const { can } = useSession();
+  if (!can("credentials:manage")) return <Notice>Only a Super Admin can manage API credentials.</Notice>;
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-6">
-      <Card
-        title="Kinguin eCommerce API"
-        aside={
-          data && (
-            <label className="flex items-center gap-2 text-xs font-semibold text-ink-700">
-              Imports use
-              <select
-                className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm"
-                value={data.active_environment}
-                onChange={(e) => switchEnv(e.target.value as Environment)}
-              >
-                <option value="live">Production</option>
-                <option value="sandbox">Sandbox</option>
-              </select>
-            </label>
-          )
-        }
-      >
-        {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
-        {!data ? (
-          <div className="h-32 animate-pulse rounded-lg bg-ink-50" />
-        ) : (
-          <div className="divide-y divide-ink-100">
-            {data.connections.map((c) => (
-              <ConnectionRow key={c.environment} c={c} active={c.environment === data.active_environment} onSaved={load} />
-            ))}
-          </div>
-        )}
-      </Card>
+      {SUPPLIERS.map((sp) => <SupplierCard key={sp.code} {...sp} />)}
       <OpenAiCard />
       </div>
       <Card title="How keys are stored">
         <ul className="list-disc space-y-2 pl-4 text-sm text-ink-700">
           <li>Keys are encrypted in the database and only decrypted inside the server when an import runs.</li>
           <li>A saved key is never shown again. To change it, paste a new one.</li>
-          <li>Production and sandbox keys are different; get them from Kinguin → Dashboard → My Stores.</li>
+          <li>Kinguin production and sandbox keys are different (Kinguin → Dashboard → My Stores). Foxreload has one key (Foxreload app → API keys).</li>
           <li>Every change is written to the audit log (without the key).</li>
         </ul>
         <p className="mt-4 text-xs text-ink-500">The WooCommerce connector key is set per storefront under Publishing.</p>

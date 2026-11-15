@@ -178,7 +178,12 @@ async def test_connection(
             info = await adapter.test_connection()
         finally:
             await adapter.aclose()
-        ok, message = True, f"Connected to the {env} API ({info.get('regions', 0)} regions available)."
+        detail = (
+            f"{info['regions']} regions available"
+            if "regions" in info
+            else f"account {info.get('account') or 'verified'}"
+        )
+        ok, message = True, f"Connected to the {s.name} {env} API ({detail})."
     except SupplierError as exc:
         message = str(exc)
     conn.status = "connected" if ok else "failed"
