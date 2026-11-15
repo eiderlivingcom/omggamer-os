@@ -121,7 +121,7 @@ final class OMG_Legal
     {
         $logos = [
             'Visa' => '<svg viewBox="0 0 64 22" width="58" height="20" aria-hidden="true"><text x="32" y="19" text-anchor="middle" fill="currentColor" font-family="Arial Black,Arial,sans-serif" font-size="22" font-style="italic" font-weight="900" letter-spacing=".5">VISA</text></svg>',
-            'Mastercard' => '<svg viewBox="0 0 120 26" width="118" height="26" aria-hidden="true"><circle cx="12" cy="13" r="11" fill="currentColor" opacity=".95"/><circle cx="26" cy="13" r="11" fill="currentColor" opacity=".55"/><text x="42" y="18" fill="currentColor" font-family="Arial,sans-serif" font-size="15" font-weight="600">mastercard</text></svg>',
+            'Mastercard' => '<svg viewBox="0 0 136 26" width="134" height="26" aria-hidden="true"><circle cx="12" cy="13" r="11" fill="currentColor" opacity=".95"/><circle cx="26" cy="13" r="11" fill="currentColor" opacity=".55"/><text x="42" y="18" fill="currentColor" font-family="Arial,sans-serif" font-size="15" font-weight="600">mastercard</text></svg>',
             'American Express' => '<svg viewBox="0 0 64 22" width="58" height="20" aria-hidden="true"><text x="32" y="17.5" text-anchor="middle" fill="currentColor" font-family="Arial Black,Arial,sans-serif" font-size="18" font-style="italic" font-weight="900" letter-spacing=".3">AMEX</text></svg>',
             'Apple Pay' => '<svg viewBox="0 0 58 24" width="54" height="22" aria-hidden="true"><path fill="currentColor" d="M15.5 12.8c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.6-1.9-1.5-.2-3 .9-3.7.9-.8 0-2-.9-3.2-.9-1.7 0-3.2 1-4.1 2.5-1.7 3-.4 7.5 1.3 9.9.8 1.2 1.8 2.5 3 2.5 1.2-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 2.9-2.4.9-1.3 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.1zM13.1 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.6 2.8-1.4z"/><text x="21" y="18" fill="currentColor" font-family="Arial,sans-serif" font-size="15" font-weight="600">Pay</text></svg>',
             'Google Pay' => '<svg viewBox="0 0 62 24" width="58" height="22" aria-hidden="true"><text x="0" y="18" fill="currentColor" font-family="Arial,sans-serif" font-size="17" font-weight="700">G</text><text x="16" y="18" fill="currentColor" font-family="Arial,sans-serif" font-size="15" font-weight="600">Pay</text></svg>',
@@ -184,6 +184,7 @@ final class OMG_Legal
     {
         ?>
 <style id="omg-legal-css">
+.omg-legal-page #brx-content>h1,.omg-legal-page #brx-content>.wp-block-post-title{display:none}
 .omg-legal{max-width:880px;margin:0 auto;padding:48px 20px 72px;color:#d9d6e8;font:400 16px/1.75 Poppins,system-ui,sans-serif}
 .omg-legal h1{margin:0 0 6px;color:#fff;font:800 clamp(28px,4vw,40px)/1.15 Poppins,system-ui,sans-serif;letter-spacing:-.01em}
 .omg-legal .omg-legal-meta{margin:0 0 28px;color:#a79ec0;font-size:14px}

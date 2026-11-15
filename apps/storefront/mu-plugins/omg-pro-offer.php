@@ -35,6 +35,14 @@ final class OMG_Pro_Offer
         add_action('woocommerce_before_calculate_totals', [__CLASS__, 'drop_coupons'], 5);
         add_action('woocommerce_blocks_loaded', [__CLASS__, 'store_api']);
         add_action('wp_footer', [__CLASS__, 'summary_js'], 90);
+        // The PRO product is never listed: only the PRO page, the PRO option on product pages and checkout add it.
+        add_action('pre_get_posts', [__CLASS__, 'hide_in_queries'], 20);
+        add_filter('woocommerce_related_products', [__CLASS__, 'hide_in_ids'], 20);
+        add_filter('woocommerce_product_get_upsell_ids', [__CLASS__, 'hide_in_ids'], 20);
+        add_filter('woocommerce_product_get_cross_sell_ids', [__CLASS__, 'hide_in_ids'], 20);
+        add_filter('wp_sitemaps_posts_query_args', [__CLASS__, 'hide_in_sitemap'], 20, 2);
+        add_filter('woocommerce_cart_item_permalink', [__CLASS__, 'cart_link'], 20, 2);
+        add_action('template_redirect', [__CLASS__, 'product_page_redirect'], 2);
     }
 
     /* ---------- PRO members and coupons ---------- */
@@ -204,6 +212,52 @@ final class OMG_Pro_Offer
             return self::$eligible = true;
         }
         return self::$eligible = !wc_customer_bought_product($email, $uid, self::PRODUCT);
+    }
+
+    /** Front-end product lists, searches and blocks never include the PRO product. */
+    public static function hide_in_queries($q): void
+    {
+        if (is_admin() && !wp_doing_ajax() || !$q instanceof WP_Query) {
+            return;
+        }
+        $pt = $q->get('post_type');
+        $types = is_array($pt) ? $pt : [$pt];
+        if (!in_array('product', $types, true) && !($q->is_search() && ($pt === '' || $pt === 'any'))) {
+            return;
+        }
+        $in = array_map('intval', (array) $q->get('post__in'));
+        if ((int) $q->get('p') === self::PRODUCT || in_array(self::PRODUCT, $in, true) || ($q->is_main_query() && $q->is_singular())) {
+            return;
+        }
+        $not = array_map('intval', (array) $q->get('post__not_in'));
+        $not[] = self::PRODUCT;
+        $q->set('post__not_in', array_values(array_unique($not)));
+    }
+
+    public static function hide_in_ids($ids)
+    {
+        return is_array($ids) ? array_values(array_filter($ids, static fn ($id) => (int) $id !== self::PRODUCT)) : $ids;
+    }
+
+    public static function hide_in_sitemap($args, $post_type)
+    {
+        if ($post_type === 'product') {
+            $args['post__not_in'] = array_merge((array) ($args['post__not_in'] ?? []), [self::PRODUCT]);
+        }
+        return $args;
+    }
+
+    public static function cart_link($link, $item)
+    {
+        return (int) ($item['product_id'] ?? 0) === self::PRODUCT ? home_url('/pro/') : $link;
+    }
+
+    public static function product_page_redirect(): void
+    {
+        if (is_singular('product') && (int) get_queried_object_id() === self::PRODUCT && !current_user_can('edit_products')) {
+            wp_safe_redirect(home_url('/pro/'), 301);
+            exit;
+        }
     }
 
     private static function is_pro($product): bool
