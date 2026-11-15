@@ -263,6 +263,8 @@ final class OMG_Flash
 @media (prefers-reduced-motion:reduce){.omg-bb-watch .dot{animation:none}}
 html body .omg-bb .omg-bb-top{display:flex!important;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 html body .omg-bb .omg-bb-top:has(.omg-bb-sold:not([hidden])){min-height:28px!important;margin-bottom:12px!important}
+html body #omg-dg .omg-bb .omg-bb-timer,html body .omg-bb .omg-bb-timer{background:rgba(245,158,11,.12)!important;border:1px solid rgba(245,158,11,.35)!important;color:#fbbf24!important;border-radius:999px!important}
+html body .omg-bb .omg-bb-timer strong{color:#fde68a!important;font-variant-numeric:tabular-nums}
 .omg-bb-sold{display:inline-flex;align-items:center;gap:6px;margin-left:auto;color:#d9d6e8;font:500 13px/1.2 Poppins,system-ui,sans-serif}
 .omg-bb-sold[hidden]{display:none}
 .omg-bb-sold b{color:#f4f2fb;font-weight:700}
