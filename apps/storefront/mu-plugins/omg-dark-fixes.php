@@ -61,6 +61,9 @@ final class OMG_Dark_Fixes
         }
         // 2b. No free-game offer anywhere (home promo copy).
         $html = str_replace('Free game bundle with every card. From $599.', 'The latest NVIDIA graphics cards. From $599.', $html);
+        // 2c. Breadcrumbs: mark the current page so phones can stop the trail at the collection.
+        $out = preg_replace('~(woocommerce-breadcrumbs[^>]*><nav><span class="navigation">.*?)<span class="separator"></span>([^<]+)(</span></nav>)~s', '$1<span class="separator omg-crumb-cur-sep"></span><span class="omg-crumb-cur">$2</span>$3', $html);
+        $html = is_string($out) ? $out : $html;
         // 3. Payment method rows become logo tiles.
         $out = preg_replace_callback('~<div\b([^>]*)>((?:\s*<span>[^<]{1,24}</span>){3,8})\s*~i', static function ($m) {
             $a = $m[1];
@@ -177,6 +180,8 @@ html body .wc-block-cart .wc-block-cart-item__total-price-and-sale-badge-wrapper
 html body .wc-block-cart .wc-block-components-formatted-money-amount,html body .wc-block-cart .wc-block-components-totals-item__value{font-family:Poppins,system-ui,sans-serif!important;font-variant-numeric:tabular-nums}
 html body .wc-block-cart,html body .wc-block-cart *:not(.star-rating):not([class*="icon"]){font-family:Poppins,system-ui,sans-serif}
 
+/* Phones: product breadcrumbs end at the collection. */
+@media (max-width:767px){html body.single-product .omg-crumb-cur,html body.single-product .omg-crumb-cur-sep{display:none!important}}
 /* No free-game progress anywhere (buy box, cart drawer, cart and checkout). */
 html body .omg-bb-free,html body .omg-bb-free-row,html body .omgd-free,html body .omg-cart-free{display:none!important}
 /* Payment method tiles. */

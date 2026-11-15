@@ -34,6 +34,7 @@ add_action('wp_footer', static function (): void {
   var SEL = '.omg-buy-now, .omg-qb-buy, .omg-mb-buy, .omgm-buy, .wc-block-cart__submit-button, .wc-block-components-checkout-place-order-button, #place_order, .omgd-checkout';
   function add(el){
     if (!el || el.querySelector(':scope > .omg-edge') || el.offsetParent === null && !el.closest('.omg-ac')) return;
+    if (el.classList.contains('omg-buy-sm') || el.closest('#omg-dg-offers, #omg-dg-of, .omg-of-list, .omg-of-row, .omg-of')) return; // offers list: no highlight
     var cs = getComputedStyle(el); if (cs.position === 'static') el.classList.add('omg-edge-host'); else el.style.isolation = 'isolate';
     var s = document.createElement('span'); s.className = 'omg-edge'; s.setAttribute('aria-hidden', 'true'); el.appendChild(s);
   }
