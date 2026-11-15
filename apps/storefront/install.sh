@@ -13,6 +13,8 @@ install -d -o "$U" -g "$G" "$DST/wp-content/mu-plugins" "$DST/wp-content/uploads
 install -m 644 -o "$U" -g "$G" "$SRC"/mu-plugins/*.php "$DST/wp-content/mu-plugins/"
 install -m 644 -o "$U" -g "$G" "$SRC"/brand/* "$DST/wp-content/uploads/omg-brand/"
 install -m 644 -o "$U" -g "$G" "$SRC"/scripts/*.php "$HOME_DIR/omg-scripts/"
+install -d -o "$U" -g "$G" "$HOME_DIR/omg-scripts/legal"
+install -m 644 -o "$U" -g "$G" "$SRC"/legal/*.html "$HOME_DIR/omg-scripts/legal/"
 for P in "$SRC"/plugins/*/ "$SRC"/../api/wp-connector/*/; do
   [ -d "$P" ] || continue
   N=$(basename "$P")
