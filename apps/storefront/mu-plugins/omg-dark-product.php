@@ -33,7 +33,9 @@ html body .omgp-cartbtn,html body .omgp-atc .single_add_to_cart_button.omgp-cart
 html body .omgp-atc .quantity,html body .omgp-atc .quantity input,html body .omgp-atc table.variations select{background-color:#1f1c2c;color:#f4f2fb;border-color:#2a2540}
 html body .omgp-setup .it.is-off .ck{background:#1f1c2c;border-color:#3a3456}
 html body .omgp-trust>*{background:#1f1c2c}
-html body .omgp-stock{background:var(--okbg);color:var(--ok)}
+html body .omgp-stock,html body .omgp-stock *{background-color:transparent;color:#4ade80}
+html body .omgp-stock{background:rgba(74,222,128,.12)}
+html body .omgp-short,html body .omgp-short *{color:#d9d6e8}
 html body .omgp-tabbar{border-color:#2a2540}
 html body .omgp-spec,html body .omgp-spec *{border-color:#2a2540}
 </style>
