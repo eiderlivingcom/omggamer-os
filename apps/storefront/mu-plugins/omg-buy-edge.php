@@ -31,7 +31,7 @@ add_action('wp_footer', static function (): void {
 </style>
 <script id="omg-edge-js">
 (function(){
-  var SEL = '.omg-buy-now, .omg-qb-buy, .omg-mb-cart, .omgm-buy, .wc-block-cart__submit-button, .wc-block-components-checkout-place-order-button, #place_order, .omgd-checkout';
+  var SEL = '.omg-buy-now, .omg-qb-buy, .omg-mb-buy, .omgm-buy, .wc-block-cart__submit-button, .wc-block-components-checkout-place-order-button, #place_order, .omgd-checkout';
   function add(el){
     if (!el || el.querySelector(':scope > .omg-edge') || el.offsetParent === null && !el.closest('.omg-ac')) return;
     var cs = getComputedStyle(el); if (cs.position === 'static') el.classList.add('omg-edge-host'); else el.style.isolation = 'isolate';

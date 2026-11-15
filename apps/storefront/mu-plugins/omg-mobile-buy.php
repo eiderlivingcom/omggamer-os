@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: OMGGamer mobile buy bar
- * Description: On phones and tablets (up to 1024px) the product page's sticky bar shows "Sold by", the price
- *              options from the buy box (PRO price / featured offer) as selectable tiles, and a full-width
- *              Add to cart button. Replaces the compact "Buy now" bar there; desktop is unchanged.
+ * Description: On phones and tablets (up to 1024px) the product page's sticky bar shows the price options from
+ *              the buy box (PRO price / featured offer) as selectable tiles and a full-width Buy Now button that
+ *              goes straight to checkout, like the buy box. Desktop is unchanged.
  * Version: 1.0.0
  */
 
@@ -61,9 +61,9 @@ final class OMG_Mobile_Buy
   .omg-mb-opt.is-pro .omg-mb-tag{text-transform:none;letter-spacing:0;font-size:11.5px;color:#16A34A}
   .omg-mb-opt.is-pro .omg-mb-tag b{color:#7C3AED}
   .omg-mb-opt[aria-checked=true] .omg-mb-tag{background:linear-gradient(#fff 55%,#FAF7FF 55%)}
-  .omg-mb-cart{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:52px;border:0;border-radius:14px;background:linear-gradient(120deg,#7C3AED 0%,#C026D3 100%);color:#fff;font:600 16px/1 Poppins,system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 22px -10px rgba(124,58,237,.7)}
-  .omg-mb-cart:active{filter:brightness(.96)}
-  .omg-mb-cart svg{width:20px;height:20px}
+  .omg-mb-buy{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:52px;border:0;border-radius:14px;background:linear-gradient(120deg,#7C3AED 0%,#C026D3 100%);color:#fff;font:600 16px/1 Poppins,system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 22px -10px rgba(124,58,237,.7)}
+  .omg-mb-buy:active{filter:brightness(.96)}
+  .omg-mb-buy svg{width:20px;height:20px}
   body.omg-mb-on.omg-mb-pad{padding-bottom:var(--omg-mb-h,170px)!important}
 }
 @media (max-width:360px){.omg-mb-price{font-size:17px}.omg-mb-opt{padding:12px 10px;gap:8px}}
@@ -107,10 +107,9 @@ final class OMG_Mobile_Buy
   function start(){
     if (!document.querySelector('.omg-bb, form.cart')) return;
     var bar = document.createElement('div'); bar.className = 'omg-mb'; bar.setAttribute('aria-hidden', 'true');
-    bar.innerHTML = '<div class="omg-mb-in">' + (C.seller ? '<div class="omg-mb-seller">Sold by <b></b></div>' : '') +
+    bar.innerHTML = '<div class="omg-mb-in">' +
       '<div class="omg-mb-opts" role="radiogroup" aria-label="Choose a price"></div>' +
-      '<button type="button" class="omg-mb-cart">' + icoCart + '<span>Add to cart</span></button></div>';
-    if (C.seller) bar.querySelector('.omg-mb-seller b').textContent = C.seller;
+      '<button type="button" class="omg-mb-buy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg><span>Buy Now</span></button></div>';
     document.body.appendChild(bar);
     document.body.classList.add('omg-mb-on');
     var box = bar.querySelector('.omg-mb-opts');
@@ -158,10 +157,15 @@ final class OMG_Mobile_Buy
     if (window.MutationObserver) new MutationObserver(update).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     update();
 
-    bar.querySelector('.omg-mb-cart').addEventListener('click', function(){
+    bar.querySelector('.omg-mb-buy').addEventListener('click', function(){
+      // Same as the buy box's Buy now (it adds PRO when the PRO price is chosen and opens checkout).
+      var buy = [].slice.call(document.querySelectorAll('.omg-bb [data-omg-buy], .omg-bb .omg-buy-now, .omgp-buynow')).filter(function(b){ return !b.closest('.omg-mb'); })[0];
+      if (buy) { buy.click(); return; }
       var btn = cartButton(); if (!btn) return;
       var needsChoice = btn.disabled || btn.classList.contains('disabled') || btn.classList.contains('wc-variation-selection-needed');
       if (needsChoice) { (document.querySelector('#pa_game-edition, .variations, form.cart') || btn).scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+      var form = btn.closest('form');
+      if (form && !form.querySelector('input[name="omg_buy_now"]')) { var h = document.createElement('input'); h.type = 'hidden'; h.name = 'omg_buy_now'; h.value = '1'; form.appendChild(h); }
       btn.click();
     });
   }
