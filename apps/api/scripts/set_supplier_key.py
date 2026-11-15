@@ -35,7 +35,7 @@ async def main(code: str) -> None:
             info = await adapter.test_connection()
             conn.status, conn.last_error = "connected", None
             print(f"{s.name}: connected ({info.get('account') or info})")
-        except Exception as exc:  # noqa: BLE001 - report any failure, key is kept for a later retry
+        except Exception as exc:
             conn.status, conn.last_error = "failed", str(exc)[:2000]
             print(f"{s.name}: saved, but the test failed: {exc}")
         finally:

@@ -29,6 +29,22 @@ const CONN: Record<string, Conn> = {
   not_configured: { tone: "muted", label: "No API key" },
 };
 
+const SUPPLIERS = [
+  {
+    code: "kinguin",
+    name: "Kinguin",
+    idHint: "Kinguin ID, e.g. 230507",
+    paging: "Kinguin is read 100 products per page (the API maximum). Each page is saved with a checkpoint.",
+  },
+  {
+    code: "foxreload",
+    name: "Foxreload",
+    idHint: "Foxreload product ID or slug",
+    paging: "Foxreload is read 200 products per page with a cursor; only game keys (code delivery) are imported. Each page is saved with a checkpoint.",
+  },
+] as const;
+type SupplierCode = (typeof SUPPLIERS)[number]["code"];
+
 const n = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString());
 
 function duration(s: number | null) {
@@ -54,14 +70,35 @@ export default function SuppliersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [singleId, setSingleId] = useState("");
+  const [code, setCode] = useState<SupplierCode>("kinguin");
+  const sup = SUPPLIERS.find((x) => x.code === code) ?? SUPPLIERS[0];
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("supplier");
+    if (q && SUPPLIERS.some((x) => x.code === q)) setCode(q as SupplierCode);
+  }, []);
+
+  function choose(next: SupplierCode) {
+    if (next === code) return;
+    setCode(next);
+    setOv(null);
+    setSelected(null);
+    setPanel(null);
+    setLogs(null);
+    setFailures(null);
+    setError(null);
+    const u = new URL(window.location.href);
+    u.searchParams.set("supplier", next);
+    window.history.replaceState(null, "", u.toString());
+  }
 
   const load = useCallback(async () => {
     try {
-      setOv(await api<ImportOverview>("/imports/overview?supplier=kinguin"));
+      setOv(await api<ImportOverview>(`/imports/overview?supplier=${code}`));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load imports.");
     }
-  }, []);
+  }, [code]);
 
   const job = useMemo(() => {
     if (!ov) return null;
@@ -113,7 +150,7 @@ export default function SuppliersPage() {
   const start = (body: Record<string, unknown>, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return;
     void act(async () => {
-      const j = await api<ImportJob>("/imports", { method: "POST", json: { supplier: "kinguin", ...body } });
+      const j = await api<ImportJob>("/imports", { method: "POST", json: { supplier: code, ...body } });
       setSelected(j.id);
     });
   };
@@ -128,21 +165,38 @@ export default function SuppliersPage() {
     <>
       <PageHeader
         title="Suppliers"
-        description="Kinguin catalogue import. Imports run on the server in the background: you can close this page and they keep going."
+        description={`${sup.name} catalogue import. Imports run on the server in the background: you can close this page and they keep going.`}
         actions={ov && <Pill tone={conn.tone}>{conn.label} · {ov.active_environment === "live" ? "production" : "sandbox"}</Pill>}
       />
+      <div className="mb-6 inline-flex rounded-lg border border-ink-200 bg-white p-1" role="tablist" aria-label="Supplier">
+        {SUPPLIERS.map((x) => (
+          <button
+            key={x.code}
+            type="button"
+            role="tab"
+            aria-selected={x.code === code}
+            onClick={() => choose(x.code)}
+            className={cx(
+              "rounded-md px-4 py-1.5 text-sm font-semibold transition",
+              x.code === code ? "bg-brand-600 text-white shadow-sm" : "text-ink-600 hover:bg-ink-50 hover:text-ink-900",
+            )}
+          >
+            {x.name}
+          </button>
+        ))}
+      </div>
       {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
       {ov && !ready && (
         <div className="mb-6">
           <Notice>
-            Add the Kinguin API key under{" "}
+            Add the {sup.name} API key under{" "}
             <Link className="font-semibold underline" href="/settings/credentials">Settings → API credentials</Link> to start importing.
           </Notice>
         </div>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-xl border border-ink-100 bg-white p-5 shadow-sm sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Kinguin records" value={n(ov?.totals.supplier_products)} hint="stored in OMGGamer OS" />
+        <Stat label={`${sup.name} records`} value={n(ov?.totals.supplier_products)} hint="stored in OMGGamer OS" />
         <Stat label="Product variants" value={n(ov?.totals.variants)} />
         <Stat label="Offers" value={n(ov?.totals.offers)} hint={ov ? `${ov.totals.offers_in_stock.toLocaleString()} in stock` : undefined} />
         <Stat label="Failed records" value={n(ov?.totals.unresolved_failures)} tone={ov?.totals.unresolved_failures ? "warn" : undefined} hint="waiting for retry" />
@@ -257,7 +311,7 @@ export default function SuppliersPage() {
           )}
 
           {job && panel === "failures" && (
-            <Card title="Failed records" aside={<span className="text-xs text-ink-500">Kinguin product ID · error</span>}>
+            <Card title="Failed records" aside={<span className="text-xs text-ink-500">{sup.name} product ID · error</span>}>
               {!failures ? (
                 <div className="h-24 animate-pulse rounded-lg bg-ink-50" />
               ) : failures.length === 0 ? (
@@ -321,7 +375,7 @@ export default function SuppliersPage() {
           {manage && (
             <Card title="Start an import">
               <p className="mb-4 text-sm text-ink-500">
-                Run the test sizes first. Imports save original Kinguin data only: nothing is published and no AI content is generated.
+                Run the test sizes first. Imports save original {sup.name} data only: nothing is published and no AI content is generated.
               </p>
               <div className="space-y-2">
                 {[100, 1000, 10000].map((m) => (
@@ -333,7 +387,7 @@ export default function SuppliersPage() {
                 <Button
                   className="w-full"
                   disabled={!ready || busy || live}
-                  onClick={() => start({ job_type: "full" }, "Start the full Kinguin catalogue import? It can take several hours and runs in the background.")}
+                  onClick={() => start({ job_type: "full" }, `Start the full ${sup.name} catalogue import? It can take several hours and runs in the background.`)}
                 >
                   Start full import
                 </Button>
@@ -355,7 +409,7 @@ export default function SuppliersPage() {
                     id="kid"
                     inputMode="numeric"
                     pattern="[0-9]+"
-                    placeholder="Kinguin ID, e.g. 230507"
+                    placeholder={sup.idHint}
                     value={singleId}
                     onChange={(e) => setSingleId(e.target.value)}
                     className="h-9 min-w-0 flex-1 rounded-lg border border-ink-200 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
@@ -368,7 +422,7 @@ export default function SuppliersPage() {
           )}
           <Card title="How the import works">
             <ul className="list-disc space-y-2 pl-4 text-sm text-ink-700">
-              <li>Kinguin is read 100 products per page (the API maximum). Each page is saved with a checkpoint.</li>
+              <li>{sup.paging}</li>
               <li>If the server restarts, the import continues from the last checkpoint on its own.</li>
               <li>Rate limits and server errors are retried with increasing waits.</li>
               <li>Records that cannot be saved are kept with the original data for “Retry failed records”.</li>

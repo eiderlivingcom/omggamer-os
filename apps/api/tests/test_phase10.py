@@ -95,6 +95,9 @@ async def test_automation_schedules_and_auto_retry(
     await make_user()
     await login(client)
     await seed_catalogue()
+    from tests.test_kinguin_import import connect
+
+    await connect()  # only suppliers with a stored key are imported on schedule (Foxreload has none here)
     bad = await client.put(
         "/api/v1/automation/settings", json={"notify": {"enabled": True, "webhook_url": "http://x"}}
     )

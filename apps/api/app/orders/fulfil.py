@@ -3,7 +3,7 @@
 Duplicate purchases are prevented three ways:
 1. One worker per order (a Postgres advisory lock).
 2. A supplier_orders row with a unique `reference` is committed *before* the purchase request; the reference
-   is sent as Kinguin's orderExternalId.
+   is sent to the supplier as our order reference (Kinguin orderExternalId, Foxreload idempotencyKey).
 3. A supplier order whose outcome is unknown (timeout, crash) is resolved by searching the supplier for that
    reference before anything is bought again.
 
@@ -42,8 +42,8 @@ from app.suppliers import registry
 from app.suppliers.base import SupplierError, SupplierRequestError
 from app.sync.service import refresh_product
 
-MAX_QTY_PER_OFFER = 9  # Kinguin: qty limit for one offer
-MAX_LINES = 10  # Kinguin: max items in `products`
+MAX_QTY_PER_OFFER = 9  # Kinguin's qty limit for one offer; kept for every supplier
+MAX_LINES = 10  # Kinguin's max items in `products`; kept for every supplier
 DEFAULTS = {"auto_fulfil": True, "allow_loss": False}
 
 
@@ -314,7 +314,7 @@ class Fulfiller:
                     item.status, item.supplier_order_id = "purchasing", so.id
                 await db.commit()  # the intent is durable before the supplier is called
 
-                _, adapter = await self._adapter(db, supplier_id)
+                sup, adapter = await self._adapter(db, supplier_id)
                 try:
                     result = await adapter.purchase(so.request["lines"], so.reference)
                 except SupplierRequestError as exc:
@@ -325,7 +325,7 @@ class Fulfiller:
                         if kind == "ProductUnavailable":
                             offer.available_quantity, offer.availability_status = 0, "unavailable"
                     message = {
-                        "InsufficientBalance": "Kinguin balance too low. Top it up, then retry.",
+                        "InsufficientBalance": f"{sup.name} balance too low. Top it up, then retry.",
                         "ProductUnavailable": "The offer sold out; another offer will be tried.",
                     }.get(kind or "", str(exc))
                     event(db, order, "purchase_failed", message, {"reference": so.reference, "kind": kind})

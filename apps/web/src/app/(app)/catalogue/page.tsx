@@ -9,7 +9,7 @@ import { api, ApiError, type BulkResult, type CategoryNode, type ProductPage } f
 import { useSession } from "@/lib/session";
 
 const FILTERS: { key: string; label: string; options: [string, string][] }[] = [
-  { key: "supplier", label: "Supplier", options: [["kinguin", "Kinguin"]] },
+  { key: "supplier", label: "Supplier", options: [["kinguin", "Kinguin"], ["foxreload", "Foxreload"]] },
   {
     key: "product_type",
     label: "Type",
@@ -171,7 +171,7 @@ function Catalogue() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search title, Kinguin ID, product ID, SKU, developer or publisher"
+          placeholder="Search title, supplier ID, product ID, SKU, developer or publisher"
           aria-label="Search products"
           className="h-10 min-w-0 flex-1 rounded-lg border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
         />
@@ -267,7 +267,7 @@ function Catalogue() {
         ) : data.items.length === 0 ? (
           <div className="p-6">
             <Empty title={activeFilters || q ? "No products match" : "No products yet"}>
-              {activeFilters || q ? "Try a different search or clear the filters." : "Products appear here after a Kinguin import (Suppliers)."}
+              {activeFilters || q ? "Try a different search or clear the filters." : "Products appear here after a supplier import (Suppliers)."}
             </Empty>
           </div>
         ) : (
@@ -312,7 +312,7 @@ function Catalogue() {
                         <span className="min-w-0">
                           <span className="block truncate font-semibold text-ink-900 hover:text-brand-700">{p.canonical_title}</span>
                           <span className="block truncate font-mono text-[11px] text-ink-500">
-                            {p.external_ids.length ? `Kinguin ${p.external_ids.slice(0, 3).join(", ")}${p.external_ids.length > 3 ? ` +${p.external_ids.length - 3}` : ""}` : "—"}
+                            {p.external_ids.length ? `ID ${p.external_ids.slice(0, 3).join(", ")}${p.external_ids.length > 3 ? ` +${p.external_ids.length - 3}` : ""}` : "—"}
                             {p.editions.length > 0 && ` · ${p.editions.join(", ")}`}
                           </span>
                         </span>

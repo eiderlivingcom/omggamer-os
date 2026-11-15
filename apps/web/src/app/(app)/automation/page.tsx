@@ -64,7 +64,7 @@ function RulesCard() {
     <Card title="Automation rules">
       <div className="space-y-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={r.full_import.enabled} onChange={(e) => setR({ ...r, full_import: { ...r.full_import, enabled: e.target.checked } })} /> Full Kinguin import every</label>
+          <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={r.full_import.enabled} onChange={(e) => setR({ ...r, full_import: { ...r.full_import, enabled: e.target.checked } })} /> Full supplier import (Kinguin and Foxreload) every</label>
           <select className={input} value={r.full_import.weekday} onChange={(e) => setR({ ...r, full_import: { ...r.full_import, weekday: Number(e.target.value) } })}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
           at <input type="number" min={0} max={23} className={`${input} w-16`} value={r.full_import.hour} onChange={(e) => setR({ ...r, full_import: { ...r.full_import, hour: Number(e.target.value) } })} />:00 UTC
         </div>
@@ -173,7 +173,7 @@ export default function AutomationPage() {
               <form onSubmit={save} className="space-y-4">
                 <label className="flex items-center gap-2 text-sm font-medium text-ink-900">
                   <input type="checkbox" disabled={!manage} checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
-                  Refresh Kinguin offers and push changed prices and stock automatically
+                  Refresh supplier offers (Kinguin and Foxreload) and push changed prices and stock automatically
                 </label>
                 <div className="flex flex-wrap items-end gap-4">
                   <label className="text-xs font-semibold text-ink-700">
@@ -254,10 +254,10 @@ export default function AutomationPage() {
           </Card>
           <Card title="How it works">
             <ul className="list-disc space-y-2 pl-4 text-sm text-ink-700">
-              <li>Each run imports only products Kinguin changed since the last run (“updated since”).</li>
+              <li>Each run imports only products Kinguin changed since the last run (“updated since”). Foxreload has no such filter, so its catalogue is re-read in full on each run.</li>
               <li>Selling prices are recalculated from the cheapest available offer. If it sells out, the next cheapest offer takes over.</li>
               <li>Only prices and stock that differ from the store are sent.</li>
-              <li>At checkout the store asks OMGGamer OS to confirm each item live with Kinguin.</li>
+              <li>At checkout the store asks OMGGamer OS to confirm each item live with its supplier.</li>
             </ul>
           </Card>
         </div>

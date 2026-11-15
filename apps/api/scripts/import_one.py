@@ -78,11 +78,13 @@ async def main(code: str, ext: str | None) -> None:
         p = await db.get(Product, res.product_id)
         v = await db.get(ProductVariant, res.variant_id)
         print(
-            f"Result: {res.status}; product {'NEW' if res.product_created else 'EXISTING'}: {p.canonical_title} "
+            f"Result: {res.status}; product {'NEW' if res.product_created else 'EXISTING'}: "
+            f"{p.canonical_title} "
             f"[{p.product_status}] id={p.id}"
         )
         print(
-            f"Variant {'NEW' if res.variant_created else 'EXISTING'}: {v.sku} | {v.platform} | {v.edition or '-'} | "
+            f"Variant {'NEW' if res.variant_created else 'EXISTING'}: {v.sku} | {v.platform} | "
+            f"{v.edition or '-'} | "
             f"{v.region} | {v.activation_type}"
         )
         offers = (

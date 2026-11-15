@@ -22,7 +22,7 @@ type OrderRow = {
 };
 type Detail = OrderRow & {
   items: { id: string; external_item_id: string; name: string | null; product_id: string | null; quantity: number; unit_price: string; supplier_cost: string | null; supplier_currency: string | null; status: string; keys: number; last_error: string | null }[];
-  supplier_orders: { id: string; reference: string; external_order_id: string | null; status: string; total_price: string | null; payment_price: string | null; keys_returned_at: string | null; last_error: string | null; created_at: string }[];
+  supplier_orders: { id: string; reference: string; external_order_id: string | null; supplier?: string | null; status: string; total_price: string | null; payment_price: string | null; keys_returned_at: string | null; last_error: string | null; created_at: string }[];
   events: { event: string; message: string; created_at: string }[];
 };
 type Overview = { counts: Record<string, number>; revenue_30d: string; supplier_cost_30d: string; settings: { auto_fulfil: boolean; allow_loss: boolean } };
@@ -100,7 +100,7 @@ export default function OrdersPage() {
     <>
       <PageHeader
         title="Orders"
-        description="Paid WooCommerce orders are bought at Kinguin once, and the keys are delivered to the customer’s order. Keys are stored encrypted and never shown here."
+        description="Paid WooCommerce orders are bought once from the supplier with the cheapest in-stock offer (Kinguin or Foxreload), and the keys are delivered to the customer’s order. Keys are stored encrypted and never shown here."
       />
       {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
       {notice && <div className="mb-4"><Notice tone="ok">{notice}</Notice></div>}
@@ -180,7 +180,7 @@ export default function OrdersPage() {
                   <Button variant="ghost" onClick={() => act(`/orders/${open.id}/resend-keys`, "Keys will be sent to the store again.")}>Resend keys to store</Button>
                   {!["fulfilled", "refunded"].includes(open.status) && <Button variant="ghost" onClick={() => act(`/orders/${open.id}/resolve`, "Marked as handled.", "Mark this order as handled by hand?")}>Mark handled</Button>}
                   {!["cancelled", "refunded"].includes(open.status) && <Button variant="ghost" onClick={() => act(`/orders/${open.id}/cancel`, "Order cancelled.", "Cancel this order? Only possible before anything was bought.")}>Cancel</Button>}
-                  {open.status !== "refunded" && <Button variant="danger" onClick={() => act(`/orders/${open.id}/refund`, "Refund recorded. Refund the payment in WooCommerce.", "Return unused keys to Kinguin (allowed within 24 hours, unclaimed keys only, once per order) and mark this order refunded?")}>Refund</Button>}
+                  {open.status !== "refunded" && <Button variant="danger" onClick={() => act(`/orders/${open.id}/refund`, "Refund recorded. Refund the payment in WooCommerce.", "Mark this order refunded? Unused Kinguin keys are returned to Kinguin (within 24 hours, unclaimed keys only, once per order); Foxreload keys cannot be returned through the API.")}>Refund</Button>}
                 </div>
               )}
             </Card>
@@ -189,7 +189,7 @@ export default function OrdersPage() {
                 <ul className="divide-y divide-ink-100 text-sm">
                   {open.supplier_orders.map((s) => (
                     <li key={s.id} className="py-2">
-                      <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs">{s.reference}</span><Pill tone={TONE[s.status] ?? "muted"}>{s.status}</Pill>{s.external_order_id && <span className="text-xs text-ink-500">Kinguin {s.external_order_id}</span>}<span className="ml-auto font-mono text-xs">{s.payment_price ? `${s.payment_price} paid` : ""}</span></div>
+                      <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs">{s.reference}</span><Pill tone={TONE[s.status] ?? "muted"}>{s.status}</Pill>{s.external_order_id && <span className="text-xs text-ink-500">{s.supplier ?? "Supplier"} {s.external_order_id}</span>}<span className="ml-auto font-mono text-xs">{s.payment_price ? `${s.payment_price} paid` : ""}</span></div>
                       {s.last_error && <div className="text-xs text-rose-700">{s.last_error}</div>}
                       {s.keys_returned_at && <div className="text-xs text-ink-500">Keys returned {fmtDate(s.keys_returned_at)}</div>}
                     </li>

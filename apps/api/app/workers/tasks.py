@@ -4,7 +4,7 @@ import asyncio
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -329,58 +329,75 @@ def sync_push(full: bool = False) -> dict[str, int]:
             log.warning("sync_push_lock_release_failed")
 
 
+async def _import_suppliers(db: Any) -> list[Any]:
+    """Active suppliers with a stored API key for their active environment (Kinguin, Foxreload, ...)."""
+    from app.db.models import Supplier
+    from app.suppliers import registry
+
+    out = []
+    rows = await db.execute(select(Supplier).where(Supplier.status == "active").order_by(Supplier.code))
+    for sup in rows.scalars():
+        conn = await registry.connection_for(db, sup, registry.active_environment(sup))
+        if conn is not None and conn.credentials_enc and sup.code in registry.ADAPTERS:
+            out.append(sup)
+    return out
+
+
 async def _sync_run() -> str:
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from app.db.models import ImportJob, Supplier
+    from app.db.models import ImportJob
     from app.db.models.jobs import ACTIVE_JOB_STATUSES
     from app.suppliers import registry
 
     engine = _session_engine()
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            supplier = (
-                await db.execute(select(Supplier).where(Supplier.code == "kinguin"))
-            ).scalar_one_or_none()
-            if supplier is None or supplier.status != "active":
+            suppliers = await _import_suppliers(db)
+            if not suppliers:
                 return "no supplier"
-            if await db.scalar(
-                select(ImportJob.id)
-                .where(ImportJob.supplier_id == supplier.id, ImportJob.status.in_(ACTIVE_JOB_STATUSES))
-                .limit(1)
-            ):
-                return "import running"
-            last = await db.scalar(
-                select(func.max(ImportJob.started_at)).where(
-                    ImportJob.supplier_id == supplier.id,
-                    ImportJob.status == "completed",
-                    ImportJob.job_type.in_(("full", "incremental")),
-                    ImportJob.params["max_records"].astext.is_(None),
+            results: list[str] = []
+            for supplier in suppliers:
+                if await db.scalar(
+                    select(ImportJob.id)
+                    .where(ImportJob.supplier_id == supplier.id, ImportJob.status.in_(ACTIVE_JOB_STATUSES))
+                    .limit(1)
+                ):
+                    results.append(f"{supplier.code}: import running")
+                    continue
+                last = await db.scalar(
+                    select(func.max(ImportJob.started_at)).where(
+                        ImportJob.supplier_id == supplier.id,
+                        ImportJob.status == "completed",
+                        ImportJob.job_type.in_(("full", "incremental")),
+                        ImportJob.params["max_records"].astext.is_(None),
+                    )
                 )
-            )
-            if last is None:
-                return "no full import yet"
-            job = ImportJob(
-                supplier_id=supplier.id,
-                job_type="incremental",
-                status="queued",
-                params={
-                    "updated_since": (last - timedelta(minutes=5)).isoformat(),
-                    "scheduled": True,
-                    "environment": registry.active_environment(supplier),
-                },
-            )
-            db.add(job)
-            await db.commit()
-            run_import.apply_async((str(job.id),), queue="imports")
-            return "queued"
+                if last is None:
+                    results.append(f"{supplier.code}: no full import yet")
+                    continue
+                job = ImportJob(
+                    supplier_id=supplier.id,
+                    job_type="incremental",
+                    status="queued",
+                    params={
+                        "updated_since": (last - timedelta(minutes=5)).isoformat(),
+                        "scheduled": True,
+                        "environment": registry.active_environment(supplier),
+                    },
+                )
+                db.add(job)
+                await db.commit()
+                run_import.apply_async((str(job.id),), queue="imports")
+                results.append(f"{supplier.code}: queued")
+            return "; ".join(results)
     finally:
         await engine.dispose()
 
 
 @celery_app.task(base=ReliableTask, name="sync.run")  # type: ignore[misc]
 def sync_run() -> str:
-    """Scheduled offer refresh: an update import from Kinguin; prices are pushed when it completes."""
+    """Scheduled offer refresh: an update import from every connected supplier; prices are pushed after."""
     return asyncio.run(_sync_run())
 
 
@@ -558,7 +575,7 @@ async def _automation_tick() -> list[str]:
 
     from app.ai.router import _eligible
     from app.automation import service as automation
-    from app.db.models import AiJob, ImportJob, Product, PublishingQueueItem, Supplier
+    from app.db.models import AiJob, ImportJob, Product, PublishingQueueItem
     from app.db.models.jobs import ACTIVE_JOB_STATUSES
     from app.suppliers import registry
 
@@ -570,15 +587,17 @@ async def _automation_tick() -> list[str]:
             await db.commit()
             s = await automation.get_settings(db)
             if "full_import" in due:
-                supplier = (
-                    await db.execute(select(Supplier).where(Supplier.code == "kinguin"))
-                ).scalar_one_or_none()
-                busy = supplier is None or await db.scalar(
-                    select(ImportJob.id)
-                    .where(ImportJob.supplier_id == supplier.id, ImportJob.status.in_(ACTIVE_JOB_STATUSES))
-                    .limit(1)
-                )
-                if supplier is not None and not busy:
+                queued_any = False
+                for supplier in await _import_suppliers(db):
+                    busy = await db.scalar(
+                        select(ImportJob.id)
+                        .where(
+                            ImportJob.supplier_id == supplier.id, ImportJob.status.in_(ACTIVE_JOB_STATUSES)
+                        )
+                        .limit(1)
+                    )
+                    if busy:
+                        continue
                     job = ImportJob(
                         supplier_id=supplier.id,
                         job_type="full",
@@ -588,6 +607,8 @@ async def _automation_tick() -> list[str]:
                     db.add(job)
                     await db.commit()
                     run_import.apply_async((str(job.id),), queue="imports")
+                    queued_any = True
+                if queued_any:
                     done.append("full_import")
             if "ai_daily" in due:
                 ids_q = _eligible().order_by(Product.updated_at.desc()).limit(int(s["ai_daily"]["limit"]))

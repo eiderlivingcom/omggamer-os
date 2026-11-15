@@ -18,6 +18,7 @@ from app.db.models import (
     Order,
     OrderEvent,
     OrderItem,
+    Supplier,
     SupplierOrder,
     User,
 )
@@ -240,6 +241,12 @@ async def get_order(order_id: uuid.UUID, db: DB, _: User = require("orders:read"
             )
         ).scalars()
     )
+    sup_names = {
+        sid: name
+        for sid, name in await db.execute(
+            select(Supplier.id, Supplier.name).where(Supplier.id.in_({s.supplier_id for s in sos}))
+        )
+    }
     events = list(
         (
             await db.execute(
@@ -283,6 +290,7 @@ async def get_order(order_id: uuid.UUID, db: DB, _: User = require("orders:read"
         "supplier_orders": [
             {
                 "id": str(s.id),
+                "supplier": sup_names.get(s.supplier_id),
                 "reference": s.reference,
                 "external_order_id": s.external_order_id,
                 "status": s.status,

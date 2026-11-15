@@ -50,7 +50,7 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        description="Live numbers from the OMGGamer OS database. Everything starts at zero until the first Kinguin import runs."
+        description="Live numbers from the OMGGamer OS database. Everything starts at zero until the first supplier import runs."
         actions={<Pill tone={health.ok ? "ok" : "warn"}>{health.ok ? "All systems working" : "Needs attention"}</Pill>}
       />
 
@@ -77,7 +77,7 @@ export default function DashboardPage() {
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card title="Catalogue by status" className="xl:col-span-2">
           {total === 0 ? (
-            <Empty title="No products yet">Products appear here after the first Kinguin import (Suppliers → Kinguin).</Empty>
+            <Empty title="No products yet">Products appear here after the first supplier import (Suppliers → Kinguin or Foxreload).</Empty>
           ) : (
             <>
               <div className="flex h-3 overflow-hidden rounded-full bg-ink-100" role="img" aria-label="Products by status">
@@ -117,7 +117,7 @@ export default function DashboardPage() {
         <Card title="Suppliers" aside={<Link className="text-xs font-semibold text-brand-600" href="/suppliers">Open</Link>}>
           <div className="grid grid-cols-2 gap-4">
             <Stat label="Suppliers" value={s.suppliers.suppliers} />
-            <Stat label="Connected" value={s.suppliers.connected} tone={s.suppliers.connected ? undefined : "warn"} hint={s.suppliers.connected ? undefined : "Kinguin key not added yet"} />
+            <Stat label="Connected" value={s.suppliers.connected} tone={s.suppliers.connected ? undefined : "warn"} hint={s.suppliers.connected ? undefined : "No supplier key added yet"} />
           </div>
         </Card>
         <Card title="Imports">
