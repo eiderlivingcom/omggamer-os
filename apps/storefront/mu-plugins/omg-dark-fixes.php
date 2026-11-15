@@ -59,6 +59,8 @@ final class OMG_Dark_Fixes
         foreach (['omg-stats'] as $id) {
             $html = self::remove_by_id($html, $id);
         }
+        // 2b. No free-game offer anywhere (home promo copy).
+        $html = str_replace('Free game bundle with every card. From $599.', 'The latest NVIDIA graphics cards. From $599.', $html);
         // 3. Payment method rows become logo tiles.
         $out = preg_replace_callback('~<div\b([^>]*)>((?:\s*<span>[^<]{1,24}</span>){3,8})\s*~i', static function ($m) {
             $a = $m[1];
@@ -175,6 +177,8 @@ html body .wc-block-cart .wc-block-cart-item__total-price-and-sale-badge-wrapper
 html body .wc-block-cart .wc-block-components-formatted-money-amount,html body .wc-block-cart .wc-block-components-totals-item__value{font-family:Poppins,system-ui,sans-serif!important;font-variant-numeric:tabular-nums}
 html body .wc-block-cart,html body .wc-block-cart *:not(.star-rating):not([class*="icon"]){font-family:Poppins,system-ui,sans-serif}
 
+/* No free-game progress anywhere (buy box, cart drawer, cart and checkout). */
+html body .omg-bb-free,html body .omg-bb-free-row,html body .omgd-free,html body .omg-cart-free{display:none!important}
 /* Payment method tiles. */
 html body .omg-paytiles{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center}
 html body .omg-paytiles>.omg-pt{display:inline-flex!important;align-items:center;justify-content:center;width:58px;height:38px;padding:0!important;margin:0!important;border-radius:9px!important;background:#1f1c2c!important;border:1px solid #2f2a45!important;box-shadow:none!important;font-size:0!important;line-height:0}

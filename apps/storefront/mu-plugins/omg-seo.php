@@ -466,6 +466,8 @@ final class OMG_SEO
 
     public static function breadcrumb(array $crumbs): array
     {
+        // No "Page 1", "Page 2" steps on paginated archives.
+        $crumbs = array_values(array_filter($crumbs, static fn ($c) => !(isset($c[0]) && preg_match('/^\s*Page\s+\d+\s*$/i', wp_strip_all_tags((string) $c[0])))));
         foreach ($crumbs as &$c) {
             if (isset($c[0]) && strpos($c[0], 'Product ') === 0) {
                 $c[0] = substr($c[0], 8);
