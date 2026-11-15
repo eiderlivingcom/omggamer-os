@@ -125,19 +125,37 @@ final class OMG_Pricing
         return is_numeric($reg) && (float) $reg > 0 ? self::sale_of((float) $reg) : null;
     }
 
+    /** Flash sale (OMG_Flash) on top of a base-currency price; unchanged outside the flash window. */
+    private static function flash($price, $product)
+    {
+        if (!class_exists('OMG_Flash') || !self::live() || !$product instanceof WC_Product || $price === '' || $price === null || !is_numeric($price)) {
+            return $price;
+        }
+        $id = $product->get_parent_id() ?: $product->get_id();
+        if ($id === self::pro_id()) {
+            return $price;
+        }
+        $f = OMG_Flash::apply((float) $price, $product);
+        return $f < (float) $price ? (string) $f : $price;
+    }
+
     public static function price($price, $product)
     {
         if (self::$pro_set && $product instanceof WC_Product && self::$pro_set->contains($product)) {
             return $price;
         }
         $sale = self::storewide($product);
-        return $sale === null ? $price : (string) $sale;
+        return self::flash($sale === null ? $price : (string) $sale, $product);
     }
 
     public static function sale_price($price, $product)
     {
         $sale = self::storewide($product);
-        return $sale === null ? $price : (string) $sale;
+        $base = $sale !== null ? (string) $sale : $price;
+        if (($base === '' || $base === null) && $product instanceof WC_Product && class_exists('OMG_Flash') && OMG_Flash::is_flash($product)) {
+            $base = $product->get_regular_price('edit');
+        }
+        return self::flash($base, $product);
     }
 
     public static function on_sale($on, $product)
@@ -145,12 +163,15 @@ final class OMG_Pricing
         if ($on || !$product instanceof WC_Product || $product->is_type('variable')) {
             return $on;
         }
+        if (class_exists('OMG_Flash') && self::live() && OMG_Flash::is_flash($product)) {
+            return true;
+        }
         return self::storewide($product) !== null ? true : $on;
     }
 
     public static function hash($hash)
     {
-        $hash[] = 'omg-pricing-' . md5(wp_json_encode(self::settings()) . (self::live() ? '1' : '0'));
+        $hash[] = 'omg-pricing-' . md5(wp_json_encode(self::settings()) . (self::live() ? '1' : '0')) . (class_exists('OMG_Flash') ? '-' . OMG_Flash::key() : '');
         return $hash;
     }
 
@@ -176,6 +197,9 @@ final class OMG_Pricing
             }
             $sale = $c['_sale_price'][0] ?? '';
             $price = is_numeric($sale) && (float) $sale > 0 && (float) $sale < (float) $reg ? (float) $sale : self::sale_of((float) $reg);
+            if (class_exists('OMG_Flash')) {
+                $price = OMG_Flash::apply($price, (int) $cid, (int) $id);
+            }
             $pro = self::pro_of($price);
             $best = $best === null ? $pro : min($best, $pro);
         }
@@ -224,6 +248,9 @@ final class OMG_Pricing
                 continue;
             }
             $base = self::own_sale($product) ? (float) $product->get_sale_price('edit') : self::sale_of((float) $reg);
+            if (class_exists('OMG_Flash')) {
+                $base = OMG_Flash::apply($base, $product);
+            }
             $product->set_price((string) self::pro_of($base));
             self::$pro_set->attach($product);
         }
