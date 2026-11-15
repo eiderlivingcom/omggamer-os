@@ -152,6 +152,8 @@ final class OMG_Quick_Buy
             'map' => $map,
             'rest' => esc_url_raw(rest_url('omg/v1/quick-buy')),
             'ajax' => esc_url_raw(add_query_arg('wc-ajax', 'add_to_cart', home_url('/'))),
+            'cart' => function_exists('wc_get_cart_url') ? esc_url_raw(wc_get_cart_url()) : home_url('/cart/'),
+            'store_cart' => esc_url_raw(rest_url('wc/store/v1/cart')),
         ];
         ?>
 <style id="omg-quick-buy-css">
@@ -171,7 +173,11 @@ final class OMG_Quick_Buy
 .omg-qb svg{width:20px;height:20px;flex:none}
 .omg-qb .omg-qb-add[aria-busy=true]{opacity:.6;cursor:wait}
 .omg-qb .omg-qb-add.is-done{background:#16A34A;border-color:#16A34A;color:#fff}
-@media (max-width:420px){.omg-qb{padding:0 10px;gap:6px}.omg-qb button,.omg-qb a{height:40px;font-size:14px}.omg-qb .omg-qb-add{width:42px;flex-basis:42px}}
+/* Once the product is in the cart the cart button becomes "View cart" in the same box, so Buy now keeps its size. */
+.omg-qb .omg-qb-view{width:48px;flex:0 0 48px;flex-direction:column;gap:1px;padding:0;background:rgba(124,58,237,.16);border:1px solid #7C3AED;color:#fff;font:700 11px/1.1 Poppins,system-ui,sans-serif;text-align:center}
+.omg-qb .omg-qb-view:hover{background:rgba(124,58,237,.3);color:#fff}
+.omg-qb .added_to_cart{display:none!important}
+@media (max-width:420px){.omg-qb{padding:0 10px;gap:6px}.omg-qb button,.omg-qb a{height:40px;font-size:14px}.omg-qb .omg-qb-add,.omg-qb .omg-qb-view{width:42px;flex-basis:42px}.omg-qb .omg-qb-view{font-size:10px}}
 /* Touch screens have no hover: keep the buttons visible and the text block raised. */
 @media (hover:none){
   .omg-qb{opacity:1;visibility:visible;transform:none}
@@ -194,6 +200,19 @@ final class OMG_Quick_Buy
     host.style.setProperty('--omg-qb-t', (cr.bottom - hr.top - bh - pad) + 'px');
     host.style.setProperty('--omg-qb-h', (bh + pad) + 'px');
   }
+  var inCart = {};
+  function viewCart(bar){
+    var add = bar.querySelector('.omg-qb-add');
+    if (!add) return;
+    var v = document.createElement('a'); v.className = 'omg-qb-view'; v.href = C.cart;
+    v.setAttribute('aria-label', 'In your cart. View cart'); v.innerHTML = '<span>View</span><span>cart</span>';
+    v.addEventListener('click', function(e){ e.stopPropagation(); });
+    add.replaceWith(v);
+  }
+  function markInCart(id){
+    inCart[id] = 1;
+    document.querySelectorAll('.omg-qb[data-pid="' + id + '"]').forEach(viewCart);
+  }
   function addToCart(btn, id){
     if (btn.getAttribute('aria-busy') === 'true') return;
     btn.setAttribute('aria-busy','true');
@@ -203,7 +222,7 @@ final class OMG_Quick_Buy
       .then(function(res){
         btn.removeAttribute('aria-busy');
         if (!res || res.error) { if (res && res.product_url) location.href = res.product_url; return; }
-        btn.classList.add('is-done'); setTimeout(function(){ btn.classList.remove('is-done'); }, 1600);
+        btn.classList.add('is-done'); setTimeout(function(){ markInCart(id); }, 700);
         if (window.jQuery) { window.jQuery(document.body).trigger('added_to_cart', [res.fragments, res.cart_hash, window.jQuery(btn)]); }
         document.dispatchEvent(new CustomEvent('omg:added-to-cart', {detail: res}));
       })
@@ -219,7 +238,7 @@ final class OMG_Quick_Buy
     card.dataset.omgQbDone = '1';
     host.classList.add('omg-qb-host');
     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
-    var bar = document.createElement('div'); bar.className = 'omg-qb';
+    var bar = document.createElement('div'); bar.className = 'omg-qb'; bar.dataset.pid = d.add;
     var title = (card.querySelector('.omg-ac-title') || {}).textContent || 'this product';
     var add = document.createElement('button'); add.type = 'button'; add.className = 'omg-qb-add';
     add.setAttribute('aria-label', 'Add ' + title.trim() + ' to cart'); add.innerHTML = icoCart;
@@ -229,6 +248,7 @@ final class OMG_Quick_Buy
     bar.appendChild(add); bar.appendChild(buy);
     card.insertAdjacentElement('afterend', bar);
     place(host, card, bar);
+    if (inCart[d.add]) viewCart(bar);
     if (window.ResizeObserver) { new ResizeObserver(function(){ place(host, card, bar); }).observe(card); }
   }
   var pending = {};
@@ -253,6 +273,10 @@ final class OMG_Quick_Buy
     }
   }
   function start(){
+    // What is already in the cart (per visitor, so read live: pages themselves may be cached).
+    fetch(C.store_cart, {credentials:'same-origin'}).then(function(r){ return r.json(); }).then(function(c){
+      ((c && c.items) || []).forEach(function(it){ markInCart(it.id); if (it.variation && it.variation.length && it.parent_id) markInCart(it.parent_id); });
+    }).catch(function(){});
     scan(document);
     if (window.MutationObserver) {
       var t; new MutationObserver(function(){ clearTimeout(t); t = setTimeout(function(){ scan(document); }, 120); })
