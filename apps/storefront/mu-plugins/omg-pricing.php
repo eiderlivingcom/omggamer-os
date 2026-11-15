@@ -251,7 +251,10 @@ final class OMG_Pricing
             if (class_exists('OMG_Flash')) {
                 $base = OMG_Flash::apply($base, $product);
             }
-            $product->set_price((string) self::pro_of($base));
+            // Never below supplier cost + minimum profit (the OS floor, or the estimate).
+            $fm = get_post_custom($product->get_id())['_omg_floor_price'][0] ?? '';
+            $floor = is_numeric($fm) && (float) $fm > 0 ? (float) $fm : self::floor_of((float) $reg);
+            $product->set_price((string) max(self::pro_of($base), min($base, round($floor, 2))));
             self::$pro_set->attach($product);
         }
     }
