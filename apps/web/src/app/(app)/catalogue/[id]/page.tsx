@@ -48,6 +48,59 @@ function plain(html: string | null | undefined) {
   return (doc.body.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+type Alias = { id: string; alias: string; source: string; created_at: string };
+
+/** Other names suppliers use for this product. Imports link records with these names here. */
+function AliasCard({ productId, canEdit }: { productId: string; canEdit: boolean }) {
+  const [rows, setRows] = useState<Alias[] | null>(null);
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => api<Alias[]>(`/catalogue/products/${productId}/aliases`).then(setRows).catch(() => setRows([])), [productId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      await api(`/catalogue/products/${productId}/aliases`, { method: "POST", json: { alias: name } });
+      setName("");
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not save the alias.");
+    }
+  }
+  async function remove(id: string) {
+    await api(`/catalogue/products/${productId}/aliases/${id}`, { method: "DELETE" }).catch(() => undefined);
+    await load();
+  }
+  return (
+    <Card title="Other names (aliases)">
+      <p className="mb-3 text-xs text-ink-500">Supplier records with these names are added to this product on import, e.g. “GTA 6 New” and “GTA 6 2026”.</p>
+      {rows && rows.length > 0 ? (
+        <ul className="mb-3 space-y-1">
+          {rows.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate">{a.alias}</span>
+              {a.source === "review" && <span className="text-xs text-ink-500">from Match review</span>}
+              {canEdit && <button onClick={() => remove(a.id)} className="text-xs text-rose-700 hover:underline">Remove</button>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mb-3 text-sm text-ink-300">{rows ? "No aliases yet." : "Loading…"}</p>
+      )}
+      {canEdit && (
+        <form onSubmit={add} className="flex gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Add a name" className="h-9 min-w-0 flex-1 rounded-lg border border-ink-200 px-3 text-sm" minLength={2} maxLength={300} />
+          <Button type="submit" className="h-9" disabled={name.trim().length < 2}>Add</Button>
+        </form>
+      )}
+      {msg && <p className="mt-2 text-xs text-rose-700">{msg}</p>}
+    </Card>
+  );
+}
+
 function flatten(nodes: CategoryNode[], depth = 0): { id: string; name: string }[] {
   return nodes.flatMap((n) => [{ id: n.id, name: `${"— ".repeat(depth)}${n.name}` }, ...flatten(n.children, depth + 1)]);
 }
@@ -185,6 +238,7 @@ export default function ProductPage() {
 
       {tab === "original" && (
         <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="space-y-6">
           <Card title="Supplier records">
             <ul className="space-y-1">
               {p.supplier_products.map((s) => (
@@ -200,6 +254,8 @@ export default function ProductPage() {
               ))}
             </ul>
           </Card>
+          <AliasCard productId={p.id} canEdit={can("catalogue:write")} />
+          </div>
           <Card title="Original data (never edited by OMGGamer OS)">
             {!original ? (
               <div className="h-40 animate-pulse rounded-lg bg-ink-50" />

@@ -13,6 +13,7 @@ from app import __version__
 from app.ai.router import router as ai_router
 from app.analytics.router import router as analytics_router
 from app.automation.router import router as automation_router
+from app.catalogue.matching_router import router as matching_router
 from app.catalogue.router import router as catalogue_router
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
         dashboard_router,
         audit_router,
         catalogue_router,
+        matching_router,
         imports_router,
         ai_router,
         pricing_router,

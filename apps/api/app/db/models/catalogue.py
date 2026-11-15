@@ -342,3 +342,46 @@ class SyncLog(UUIDPk, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+MATCH_STATUSES = ("pending", "accepted", "rejected", "superseded")
+
+
+class ProductAlias(UUIDPk, Timestamps, Base):
+    """Another name for a master product ("GTA 6 New" = "GTA 6 2026"). Supplier records whose title has the
+    same match key are linked to the product on import instead of creating a duplicate."""
+
+    __tablename__ = "product_aliases"
+    __table_args__ = (UniqueConstraint("alias_key", "product_type"),)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    alias: Mapped[str] = mapped_column(String(300), nullable=False)
+    alias_key: Mapped[str] = mapped_column(String(300), nullable=False)
+    product_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")  # manual | review
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+
+class MatchSuggestion(UUIDPk, Timestamps, Base):
+    """A possible duplicate: `product_id` (new, from one supplier) may be the same item as `candidate_id`
+    (already in the catalogue from another supplier). Staff accept (merge) or reject it in Match review."""
+
+    __tablename__ = "match_suggestions"
+    __table_args__ = (
+        UniqueConstraint("product_id", "candidate_id"),
+        CheckConstraint(_in("status", MATCH_STATUSES), name="status_valid"),
+        CheckConstraint("product_id <> candidate_id", name="different_products"),
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    candidate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id", ondelete="SET NULL"))
+    score: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    reasons: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

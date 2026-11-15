@@ -163,7 +163,12 @@ function Catalogue() {
       <PageHeader
         title="Catalogue"
         description="Master products from every supplier. Search and filters run on the server; nothing is loaded in bulk."
-        actions={data && <span className="text-sm text-ink-500">{data.total.toLocaleString()} products</span>}
+        actions={
+          <div className="flex items-center gap-3">
+            {data && <span className="text-sm text-ink-500">{data.total.toLocaleString()} products</span>}
+            <Link href="/catalogue/matches" className="inline-flex h-9 items-center rounded-lg border border-ink-200 px-3 text-sm font-semibold text-ink-700 hover:bg-ink-50">Match review</Link>
+          </div>
+        }
       />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">

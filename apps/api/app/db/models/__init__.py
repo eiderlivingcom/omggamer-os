@@ -1,5 +1,7 @@
 from app.db.models.catalogue import (
+    MatchSuggestion,
     Product,
+    ProductAlias,
     ProductCategory,
     ProductCategoryMapping,
     ProductContent,
@@ -40,6 +42,7 @@ __all__ = [
     "ImportJob",
     "ImportLog",
     "IntegrationCredential",
+    "MatchSuggestion",
     "Order",
     "OrderEvent",
     "OrderItem",
@@ -47,6 +50,7 @@ __all__ = [
     "PriceHistory",
     "PricingRule",
     "Product",
+    "ProductAlias",
     "ProductCategory",
     "ProductCategoryMapping",
     "ProductContent",

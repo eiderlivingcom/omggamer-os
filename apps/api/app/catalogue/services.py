@@ -13,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.catalogue.matching import find_by_alias, suggest_for
 from app.catalogue.normalize import base_title, match_key, payload_checksum, slugify, variant_key
 from app.catalogue.repositories import (
     CategoryRepository,
@@ -25,6 +26,7 @@ from app.catalogue.repositories import (
 )
 from app.catalogue.schemas import IngestResult, NormalizedProduct
 from app.core.errors import AppError
+from app.core.logging import log
 from app.db.models import (
     Product,
     ProductCategory,
@@ -89,6 +91,13 @@ class CatalogueService:
             )
 
         product, product_created = await self._master_for(sp, item)
+        if product_created:
+            # Possibly the same item another supplier already has under a different name: queue it for review.
+            try:
+                async with self.db.begin_nested():
+                    await suggest_for(self.db, product, supplier.id)
+            except Exception:  # matching must never stop an import
+                log.warning("match_suggest_failed", product_id=str(product.id))
         variant, variant_created = await self._variant_for(product, item)
         self._fill_empty_facts(product, item)
 
@@ -147,6 +156,10 @@ class CatalogueService:
         found = await self.products.find_by_match_key(key, item.product_type)
         if found is not None:
             return await self.products.resolve_master(found), False
+        # A name staff confirmed earlier ("GTA 6 New" = "GTA 6 2026"), from Match review or the product page.
+        aliased = await find_by_alias(self.db, key, item.product_type)
+        if aliased is not None:
+            return await self.products.resolve_master(aliased), False
         product = Product(
             canonical_title=title[:300],
             slug=await self.products.unique_slug(title),

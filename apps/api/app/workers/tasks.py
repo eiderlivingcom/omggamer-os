@@ -225,6 +225,38 @@ def apply_category_rules() -> int:
     return asyncio.run(_apply_category_rules())
 
 
+async def _matching_scan(restart: bool = False) -> dict[str, Any]:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.catalogue.matching import scan
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            total: dict[str, Any] = {"checked": 0, "suggestions": 0, "complete": False}
+            # Batches of 500, committed one by one, for up to ~20 minutes of work per run.
+            started = time.monotonic()
+            first = True
+            while time.monotonic() - started < 20 * 60:
+                r = await scan(db, limit=500, restart=restart and first)
+                await db.commit()
+                first = False
+                total["checked"] += r["checked"]
+                total["suggestions"] += r["suggestions"]
+                if r["complete"]:
+                    total["complete"] = True
+                    break
+            return total
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="matching.scan")  # type: ignore[misc]
+def matching_scan(restart: bool = False) -> dict[str, Any]:
+    """Find possible cross-supplier duplicates among existing products (Catalogue → Match review)."""
+    return asyncio.run(_matching_scan(restart))
+
+
 async def _publish(item_id: str) -> "PublishOutcome":
     from app.publishing.runner import Publisher
 
