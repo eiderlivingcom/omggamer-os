@@ -72,19 +72,11 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      <div className="relative hidden overflow-hidden bg-navy-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+      <div className="relative hidden items-center justify-center overflow-hidden bg-navy-950 p-12 lg:flex">
         <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-600/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 left-10 h-80 w-80 rounded-full bg-fuchsia-600/20 blur-3xl" />
-        <div className="relative flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/omggamer-logo.svg" alt="OMGGamer" width={185} height={52} className="h-12 w-auto brightness-0 invert" />
-          <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-ink-200">OS</span>
-        </div>
-        <div className="relative max-w-md">
-          <h1 className="text-4xl font-extrabold leading-tight tracking-tight">One catalogue for every supplier and every storefront.</h1>
-          <p className="mt-4 text-ink-300">Import from Kinguin and future suppliers, write and approve product content, set prices, and publish to omggamer.com.</p>
-        </div>
-        <div className="relative font-mono text-xs text-ink-500">os.omggamer.com · staff access only</div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/omggamer-logo.svg" alt="OMGGamer" width={260} height={73} className="relative h-16 w-auto brightness-0 invert" />
       </div>
       <div className="flex items-center justify-center bg-white px-4 py-12 sm:px-8">
         <div className="w-full max-w-sm">
