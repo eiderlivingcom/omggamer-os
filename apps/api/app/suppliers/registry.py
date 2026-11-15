@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_secret
 from app.db.models import Supplier, SupplierConnection
 from app.suppliers.base import SupplierAdapter, SupplierAuthError
+from app.suppliers.foxreload.adapter import FoxreloadAdapter
 from app.suppliers.kinguin.adapter import KinguinAdapter
 
 ENVIRONMENTS = ("live", "sandbox")
@@ -43,6 +44,9 @@ def decrypt_credentials(conn: SupplierConnection | None) -> dict[str, Any]:
 # Adding a supplier = writing its adapter (see SupplierAdapterBase) and registering it here.
 ADAPTERS: dict[str, Callable[[dict[str, Any], str, dict[str, Any]], SupplierAdapter]] = {
     "kinguin": lambda cfg, env, creds: KinguinAdapter.build(
+        cfg, env, str(creds.get("api_key") or ""), transport_override
+    ),
+    "foxreload": lambda cfg, env, creds: FoxreloadAdapter.build(
         cfg, env, str(creds.get("api_key") or ""), transport_override
     ),
 }

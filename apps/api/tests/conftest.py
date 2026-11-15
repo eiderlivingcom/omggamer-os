@@ -87,7 +87,7 @@ async def clean() -> AsyncIterator[None]:
     async with get_sessionmaker()() as db:
         await db.execute(text(f"TRUNCATE {', '.join(DATA_TABLES)} RESTART IDENTITY CASCADE"))
         # Suppliers and storefronts are seeded by migrations; drop only rows that tests added.
-        await db.execute(text("DELETE FROM suppliers WHERE code <> 'kinguin'"))
+        await db.execute(text("DELETE FROM suppliers WHERE code NOT IN ('kinguin', 'foxreload')"))
         await db.execute(
             text(
                 "UPDATE suppliers SET configuration = configuration"

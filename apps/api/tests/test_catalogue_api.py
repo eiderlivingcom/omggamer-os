@@ -141,7 +141,8 @@ async def test_viewer_can_read_but_not_write(client: AsyncClient, make_user: Mak
     await login(client, "viewer@omggamer.com")
     ids = await seed()
     assert (await client.get("/api/v1/catalogue/products")).status_code == 200
-    assert (await client.get("/api/v1/suppliers")).json()[0]["supplier_products"] == 3
+    sups = {s["code"]: s for s in (await client.get("/api/v1/suppliers")).json()}
+    assert sups["kinguin"]["supplier_products"] == 3
     assert {s["code"] for s in (await client.get("/api/v1/storefronts")).json()} == {
         "omggamer-live",
         "omggamer-staging",

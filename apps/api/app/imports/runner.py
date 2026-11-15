@@ -152,6 +152,9 @@ class ImportRunner:
             cp = dict(job.checkpoint or {})
             page = int(cp.get("page", 1))
             before = adapter.requests_made
+            set_cursor = getattr(adapter, "set_cursor", None)
+            if callable(set_cursor):  # cursor-paged suppliers resume from the saved cursor
+                set_cursor(cp.get("cursor") if page > 1 else None)
             result = await adapter.fetch_page(page, limit, updated_since)
             job.api_requests += adapter.requests_made - before
             job.last_response_at = now()
@@ -178,6 +181,8 @@ class ImportRunner:
                 consecutive_failures=0,
             )
             cp.pop("retry_at", None)
+            if "next_cursor" in result.raw_meta:
+                cp["cursor"] = result.raw_meta["next_cursor"]
             job.checkpoint = cp
             self._log(
                 db,
@@ -192,6 +197,7 @@ class ImportRunner:
 
             finished = (
                 returned == 0
+                or ("next_cursor" in result.raw_meta and not result.raw_meta["next_cursor"])
                 or returned < limit
                 or (result.total is not None and page * limit >= result.total)
                 or (max_records is not None and job.processed_records >= max_records)

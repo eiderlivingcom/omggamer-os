@@ -172,8 +172,9 @@ class BulkService:
         return "changed"
 
     async def _publish(self, p: Product, body: BulkIn) -> str:
-        if p.product_status in ("draft", "review") and "publishing:approve" in permissions_for(self.actor.role.key):
-            # Publishing is an explicit go-ahead: someone allowed to approve approves the product in the same step.
+        can_approve = "publishing:approve" in permissions_for(self.actor.role.key)
+        if p.product_status in ("draft", "review") and can_approve:
+            # Publishing is an explicit go-ahead: someone allowed to approve approves it in the same step.
             await self._approve(p, body)
         if p.product_status not in ("approved", "published", "unpublished"):
             return "not_approved"

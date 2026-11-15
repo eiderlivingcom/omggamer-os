@@ -137,6 +137,12 @@ class CatalogueService:
                 return await self.products.resolve_master(existing), False
         title = (item.base_title or base_title(item.original_title)).strip()
         key = match_key(item.base_title or item.original_title) or slugify(item.original_title)
+        steam = str((item.variant_attributes or {}).get("steam_app_id") or "").strip()
+        if steam.isdigit():
+            # Same Steam app = same game, whatever each supplier calls it ("GTA V", "Grand Theft Auto V").
+            by_steam = await self.products.find_by_steam_app(steam, item.product_type)
+            if by_steam is not None:
+                return await self.products.resolve_master(by_steam), False
         await self.products.lock_match_key(key, item.product_type)
         found = await self.products.find_by_match_key(key, item.product_type)
         if found is not None:

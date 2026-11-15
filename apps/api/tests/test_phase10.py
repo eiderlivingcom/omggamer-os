@@ -79,14 +79,14 @@ async def test_analytics_summary_uses_real_counts(client: AsyncClient, make_user
         and a["catalogue"]["variants"] == 2
         and a["catalogue"]["offers_available"] == 2
     )
-    assert a["catalogue"]["by_supplier"] == [{"supplier": "Kinguin", "products": 2, "records": 2}]
+    assert {"supplier": "Kinguin", "products": 2, "records": 2} in a["catalogue"]["by_supplier"]
     assert a["ai"]["completion_pct"] == 50.0 and a["ai"]["approved_pct"] == 50.0
     assert (
         a["sales"]["orders"] == 1
         and a["sales"]["revenue"] == "20.00"
         and a["sales"]["fulfilled_pct"] == 100.0
     )
-    assert len(a["sales"]["daily"]) == 1 and a["suppliers"]["imports"][0]["supplier"] == "Kinguin"
+    assert len(a["sales"]["daily"]) == 1 and "Kinguin" in {i["supplier"] for i in a["suppliers"]["imports"]}
 
 
 async def test_automation_schedules_and_auto_retry(

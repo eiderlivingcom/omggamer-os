@@ -95,6 +95,21 @@ class ProductRepository:
         )
         return (await self.db.execute(q)).scalar_one_or_none()
 
+    async def find_by_steam_app(self, app_id: str, product_type: str) -> Product | None:
+        """A product that already has a variant with this Steam app ID (exact cross-supplier match)."""
+        q = (
+            select(Product)
+            .join(ProductVariant, ProductVariant.product_id == Product.id)
+            .where(
+                ProductVariant.variant_attributes["steam_app_id"].astext == str(app_id),
+                Product.product_type == product_type,
+                Product.product_status != "merged",
+            )
+            .order_by(Product.created_at)
+            .limit(1)
+        )
+        return (await self.db.execute(q)).scalars().first()
+
     async def unique_slug(self, base: str, exclude_id: uuid.UUID | None = None) -> str:
         root = slugify(base)
         candidate, n = root, 1

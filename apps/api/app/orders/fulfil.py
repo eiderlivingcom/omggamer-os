@@ -455,7 +455,11 @@ class Fulfiller:
                 if not kid or kid in known or not serial:
                     continue
                 target = next(
-                    (i for i in by_ext.get(str(k.get("kinguinId")), []) if i.keys_delivered < i.quantity),
+                    (
+                        i
+                        for i in by_ext.get(str(k.get("external_product_id") or k.get("kinguinId")), [])
+                        if i.keys_delivered < i.quantity
+                    ),
                     None,
                 )
                 db.add(

@@ -14,7 +14,7 @@ async def test_dashboard_counts_come_from_the_database(client: AsyncClient, make
     await login(client)
     empty = (await client.get("/api/v1/dashboard/summary")).json()
     assert empty["catalogue"]["products"] == 0
-    assert empty["suppliers"]["suppliers"] == 1  # Kinguin is seeded by the migration
+    assert empty["suppliers"]["suppliers"] == 2  # Kinguin and Foxreload are seeded by migrations
     assert empty["suppliers"]["connected"] == 0
 
     async with get_sessionmaker()() as db:
@@ -63,7 +63,7 @@ async def test_health_reports_each_dependency(client: AsyncClient, make_user: Ma
     names = {c["name"]: c for c in h["checks"]}
     assert names["Database"]["ok"] and names["Redis"]["ok"]
     assert names["Background workers"]["ok"] is False  # no worker running in tests
-    assert h["ok"] is False and h["migration"] == "0010"
+    assert h["ok"] is False and h["migration"] == "0011"
 
     await get_redis().set(WORKER_HEARTBEAT_KEY, str(time.time()))
     await get_redis().set(BEAT_HEARTBEAT_KEY, str(time.time()))
