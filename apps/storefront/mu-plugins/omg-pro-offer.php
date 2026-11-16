@@ -28,6 +28,7 @@ final class OMG_Pro_Offer
         add_filter('woocommerce_product_get_regular_price', [__CLASS__, 'regular'], 6, 2);
         add_filter('woocommerce_product_is_on_sale', [__CLASS__, 'on_sale'], 20, 2);
         add_filter('woocommerce_coupon_is_valid_for_product', [__CLASS__, 'coupon_product'], 20, 2);
+        add_filter('get_post_metadata', [__CLASS__, 'live_pro_meta'], 20, 4);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'item_note'], 20, 2);
         add_action('template_redirect', [__CLASS__, 'shop_redirect'], 1);
         add_action('wp_enqueue_scripts', [__CLASS__, 'checkout_data'], 100);
@@ -135,6 +136,47 @@ final class OMG_Pro_Offer
         return (!$from || $from->getTimestamp() <= time()) && (!$to || $to->getTimestamp() >= time());
     }
 
+    /** What a PRO member pays for one unit (base currency): the cart's own rule, never below the cost floor. */
+    public static function member_price(WC_Product $p): ?array
+    {
+        if (!class_exists('OMG_Pricing')) {
+            return null;
+        }
+        $reg = $p->get_regular_price('edit');
+        if (!is_numeric($reg) || (float) $reg <= 0) {
+            return null;
+        }
+        $nm = self::own_sale($p) ? (float) $p->get_sale_price('edit') : OMG_Pricing::sale_of((float) $reg);
+        if (class_exists('OMG_Flash')) {
+            $nm = (float) OMG_Flash::apply($nm, $p);
+        }
+        $fm = get_post_custom($p->get_id())['_omg_floor_price'][0] ?? '';
+        $floor = is_numeric($fm) && (float) $fm > 0 ? (float) $fm : OMG_Pricing::floor_of((float) $reg);
+        return ['before' => $nm, 'pro' => max(OMG_Pricing::pro_of($nm), min($nm, round($floor, 2)))];
+    }
+
+    /** The checkout's "PRO members pay up to … less" reads omg_pro_price: give it the live member price. */
+    public static function live_pro_meta($value, $object_id, $meta_key, $single)
+    {
+        if ($meta_key !== 'omg_pro_price' || is_admin() || self::$in_meta) {
+            return $value;
+        }
+        self::$in_meta = true;
+        try {
+            $p = wc_get_product((int) $object_id);
+            $m = $p instanceof WC_Product && !$p->is_type('variable') ? self::member_price($p) : null;
+        } finally {
+            self::$in_meta = false;
+        }
+        if (!$m) {
+            return $value;
+        }
+        $v = (string) round($m['pro'], 2);
+        return $single ? $v : [$v];
+    }
+
+    private static bool $in_meta = false;
+
     public static function summary_data(): array
     {
         $out = ['pro_active' => false, 'pro_in_cart' => false, 'member' => false, 'coupons' => function_exists('wc_coupons_enabled') ? wc_coupons_enabled() : true, 'items' => 0, 'discounted' => 0, 'pro_discount' => 0, 'subtotal_before_pro' => 0, 'pro_line' => 0];
@@ -160,9 +202,11 @@ final class OMG_Pro_Offer
             $p = $item['data'] ?? null;
             if ($active && $pct > 0 && $p instanceof WC_Product && class_exists('OMG_Pricing')) {
                 $reg = $p->get_regular_price('edit');
-                if (is_numeric($reg) && (float) $reg > 0) {
-                    $nm = self::own_sale($p) ? (float) $p->get_sale_price('edit') : OMG_Pricing::sale_of((float) $reg);
-                    $d = max(0, (float) $conv($nm) - (float) $conv(OMG_Pricing::pro_of($nm))) * $qty;
+                $m = is_numeric($reg) && (float) $reg > 0 ? self::member_price($p) : null;
+                if ($m) {
+                    // Same calculation as the cart: the real difference between the price before PRO and the
+                    // member price (which never goes below the product's cost floor), not a flat percentage.
+                    $d = max(0, round((float) $conv($m['before']), 2) - round((float) $conv($m['pro']), 2)) * $qty;
                     if ($d > 0) {
                         $disc += $d;
                         $out['discounted'] += $qty;
