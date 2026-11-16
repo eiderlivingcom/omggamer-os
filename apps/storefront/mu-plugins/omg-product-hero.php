@@ -99,8 +99,9 @@ html body #omg-dg-pills .omg-hero-sold[hidden]{display:none!important}
 html body #omg-dg-pills .omg-hero-sold b{color:#fff;font-weight:700}
 html body #omg-dg-pills .omg-hero-sold svg{color:#fb923c;flex:none}
 body:has(#omg-dg-pills .omg-hero-sold) .omg-bb .omg-bb-sold:not(.omg-hero-sold){display:none!important}
-/* The old "Recent purchases" box made up its entries: never shown. */
-html body .omg-fx-feed{display:none!important}
+/* The template's own feed and counters ("Recent purchases", "N people bought it today", "N people watching")
+   are generated from random numbers: never shown. The real ones come from orders and live visitors. */
+html body .omg-fx-feed,html body .omg-fx-sold,html body .omg-fx-watch{display:none!important}
 .omg-rp{margin-top:16px;padding:18px 20px;border-radius:16px;background:#141121;border:1px solid #2a2540}
 .omg-rp-h{display:flex;align-items:center;gap:10px;margin:0 0 10px;color:#fff;font:600 16px/1.2 Poppins,system-ui,sans-serif}
 .omg-rp-h .dot{width:10px;height:10px;border-radius:50%;background:#34d399;box-shadow:0 0 0 0 rgba(52,211,153,.55);animation:omg-rp-pulse 2s ease-out infinite}
