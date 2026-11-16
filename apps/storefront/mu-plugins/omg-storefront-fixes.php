@@ -190,6 +190,10 @@ html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-
 .omgx-items .im{width:72px!important;height:96px!important}
 @media (max-width:640px){.omgx-items .im{width:60px!important;height:80px!important}}
 .omgx-pro.is-on .seg{display:none!important}
+/* Place order: large and centred. */
+html body .wc-block-checkout__actions_row{display:flex!important;justify-content:center!important;align-items:center!important;flex-wrap:wrap;gap:16px}
+html body .wc-block-checkout__actions_row .wc-block-components-checkout-return-to-cart-button{order:2}
+html body .wc-block-components-checkout-place-order-button,html body #place_order{width:100%!important;max-width:560px!important;min-height:60px!important;margin:8px auto 0!important;font-size:18px!important;font-weight:700!important;border-radius:14px!important;display:flex!important;justify-content:center!important;align-items:center!important}
 .omgx-pro.is-on .sv{margin-top:4px}
 
 /* Cart page (block cart) covers. */
@@ -235,13 +239,27 @@ html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-
       t.removeAttribute('aria-busy'); bypass = true; try { t.click(); } finally { bypass = false; }
     });
   }, true);
+  /* Checkout summary: when the PRO membership is in the cart, the PRO box shows it as added (no "No thanks"). */
+  function proItems(){
+    try { var d = window.wp && wp.data && wp.data.select('wc/store/cart'); var c = d && d.getCartData && d.getCartData(); return (c && c.items) || []; } catch (e) { return []; }
+  }
+  function syncProBox(){
+    var box = document.querySelector('.omgx-pro'); if (!box) return;
+    var has = proItems().some(function(i){ return Number(i.id) === Number(C.proId) || /\bPRO Membership\b/i.test(i.name || ''); });
+    if (!has) return;
+    if (!box.classList.contains('is-on')) box.classList.add('is-on');
+    var tag = box.querySelector('.hd .tag'); if (tag && tag.textContent !== 'Added') { tag.textContent = 'Added'; tag.classList.remove('hot'); }
+    var on = box.querySelector('[data-omgx-pro="on"]'), off = box.querySelector('[data-omgx-pro="off"]');
+    if (on && !on.classList.contains('is-on')) on.classList.add('is-on');
+    if (off && off.classList.contains('is-on')) off.classList.remove('is-on');
+  }
   /* Card rating tag that has no value prints its raw name ({woo_...}): hide it. */
   function cleanRatings(){ document.querySelectorAll('.omg-ac-rating').forEach(function(r){ if (/\{[a-z_]+\}/.test(r.textContent)) r.style.display = 'none'; }); }
   /* Offers heading: "1 seller · from $X" → "from $X" (no seller count for now). */
   function offersSummary(){ var e = document.getElementById('omg-dg-of-summary'); if (!e) return;
     var fix = function(){ var h = e.innerHTML, n = h.replace(/^\s*\d+\s+sellers?\s*(?:·|&middot;|-)\s*/i, ''); if (n !== h) e.innerHTML = n; };
     fix(); if (window.MutationObserver) new MutationObserver(fix).observe(e, {childList:true, characterData:true, subtree:true}); }
-  function start(){ moveAdded(); cleanRatings(); offersSummary(); if (window.MutationObserver) new MutationObserver(function(){ clearTimeout(cleanRatings.t); cleanRatings.t = setTimeout(cleanRatings, 150); }).observe(document.body, {childList:true, subtree:true}); if (window.MutationObserver && document.getElementById('omgd')) new MutationObserver(moveAdded).observe(document.getElementById('omgd'), {childList:true, subtree:true}); }
+  function start(){ moveAdded(); cleanRatings(); offersSummary(); syncProBox(); if (window.MutationObserver) new MutationObserver(function(){ clearTimeout(cleanRatings.t); cleanRatings.t = setTimeout(function(){ cleanRatings(); syncProBox(); }, 150); }).observe(document.body, {childList:true, subtree:true}); if (window.MutationObserver && document.getElementById('omgd')) new MutationObserver(moveAdded).observe(document.getElementById('omgd'), {childList:true, subtree:true}); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
