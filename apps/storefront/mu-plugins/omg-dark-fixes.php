@@ -373,6 +373,37 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
         document.querySelectorAll('.omg-ed-card').forEach(function(c){ if (c.getAttribute('data-value') === at[ed.name] && !c.classList.contains('is-active')) c.click(); });
       }
     }
+    // Option cards ("Steam · Platform"): price each from the in-stock variations that match the current choices.
+    var symEl = document.querySelector('.woocommerce-Price-currencySymbol'), sym = symEl ? symEl.textContent : '$';
+    var cardPrices = function(){
+      document.querySelectorAll('.omg-ed-card[data-value]').forEach(function(c){
+        var val = c.getAttribute('data-value');
+        var own = sels.filter(function(x){ return Array.prototype.some.call(x.options, function(o){ return o.value === val; }); })[0];
+        if (!own) return;
+        var min = null;
+        ok.forEach(function(v){
+          var a = v.attributes || {};
+          var match = sels.every(function(x){
+            var want = x === own ? val : x.value;
+            return !want || !a[x.name] || a[x.name] === want;
+          });
+          if (match) min = min === null ? v.display_price : Math.min(min, v.display_price);
+        });
+        var pr = c.querySelector('.omg-ed-price');
+        if (pr) pr.textContent = min === null ? 'Unavailable' : 'from ' + sym + Number(min).toFixed(2);
+        c.classList.toggle('is-disabled', min === null);
+      });
+    };
+    cardPrices();
+    f.addEventListener('change', function(){ setTimeout(cardPrices, 0); });
+    if (vis) vis.addEventListener('change', function(){ setTimeout(cardPrices, 0); });
+    // Region links in the specs: keep only regions in stock.
+    document.querySelectorAll('#omg-dg-spec-region .omg-dg-spec-v').forEach(function(p){
+      var links = Array.prototype.slice.call(p.querySelectorAll('a')).filter(function(l){ return liveRegions.indexOf(l.textContent.trim()) > -1; });
+      if (!links.length || links.length === p.querySelectorAll('a').length) return;
+      p.textContent = '';
+      links.forEach(function(l, i){ if (i) p.appendChild(document.createTextNode(', ')); p.appendChild(l); });
+    });
     // Region lists such as "EUROPE , EUROPE - all countries , Global" name only regions in stock.
     if (allRegions.length > 1 && liveRegions.length && liveRegions.length < allRegions.length) {
       var norm = function(t){ return t.replace(/\s*,\s*/g, ',').replace(/\s+/g, ' ').trim().toLowerCase(); };
