@@ -447,7 +447,9 @@ class OMG_Connector_Products
                     $this->warnings[] = "Image not downloaded ({$url}): " . $tmp->get_error_message();
                     continue;
                 }
-                $name = basename(parse_url($url, PHP_URL_PATH)) ?: 'image.jpg';
+                // SEO file name from OMGGamer OS ("game-title-steam-key-cover.jpg"); the supplier's name otherwise.
+                $seo = is_array($img) ? sanitize_file_name((string) ($img['filename'] ?? '')) : '';
+                $name = $seo ?: (basename(parse_url($url, PHP_URL_PATH)) ?: 'image.jpg');
                 if (!preg_match('/\.(jpe?g|png|gif|webp)$/i', $name)) {
                     $name .= '.jpg';
                 }
@@ -461,6 +463,13 @@ class OMG_Connector_Products
             }
             if (is_array($img) && !empty($img['alt'])) {
                 update_post_meta($att, '_wp_attachment_image_alt', sanitize_text_field($img['alt']));
+            }
+            // Media library title (also used as the image title attribute) describes the product, not the file.
+            if (is_array($img) && !empty($img['title'])) {
+                $t = sanitize_text_field($img['title']);
+                if (get_the_title($att) !== $t) {
+                    wp_update_post(['ID' => (int) $att, 'post_title' => $t]);
+                }
             }
             $ids[] = (int) $att;
         }

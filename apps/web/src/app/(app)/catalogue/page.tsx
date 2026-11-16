@@ -14,7 +14,7 @@ const FILTERS: { key: string; label: string; options: [string, string][] }[] = [
     key: "product_type",
     label: "Type",
     options: [
-      ["game", "Game"], ["dlc", "DLC"], ["game_account", "Account"], ["gift_card", "Gift card"],
+      ["game", "Game"], ["dlc", "DLC"], ["game_account", "Account"], ["game_currency", "Game cash"], ["gift_card", "Gift card"],
       ["software", "Software"], ["subscription", "Subscription"], ["hardware", "Hardware"], ["accessory", "Accessory"],
     ],
   },
@@ -34,6 +34,19 @@ const FILTERS: { key: string; label: string; options: [string, string][] }[] = [
     label: "Publishing",
     options: [["not_published", "Not published"], ["pending", "Pending"], ["published", "Live"], ["failed", "Failed"], ["unpublished", "Unpublished"]],
   },
+];
+/** Product type tabs above the list: each type is its own section of the catalogue. */
+const TYPE_TABS: [string, string][] = [
+  ["", "All"],
+  ["game", "Games"],
+  ["dlc", "DLC"],
+  ["game_account", "Accounts"],
+  ["game_currency", "Game cash"],
+  ["gift_card", "Gift cards"],
+  ["software", "Software"],
+  ["subscription", "Subscriptions"],
+  ["hardware", "Hardware"],
+  ["accessory", "Accessories"],
 ];
 const TEXT_FILTERS = [
   { key: "platform", label: "Platform", placeholder: "Steam, PS5…" },
@@ -84,6 +97,11 @@ function Catalogue() {
   const query = params.toString();
   const page = Number(params.get("page") ?? 1);
   const pageSize = Number(params.get("page_size") ?? 50);
+
+  const [typeCounts, setTypeCounts] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    api<Record<string, number>>("/catalogue/type-counts").then(setTypeCounts).catch(() => undefined);
+  }, []);
 
   const setParam = useCallback(
     (changes: Record<string, string | null>) => {
@@ -170,6 +188,24 @@ function Catalogue() {
           </div>
         }
       />
+
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Product type">
+        {TYPE_TABS.filter(([k]) => !k || !typeCounts || typeCounts[k] || params.get("product_type") === k).map(([k, label]) => {
+          const on = (params.get("product_type") ?? "") === k;
+          const n = typeCounts ? (k ? typeCounts[k] ?? 0 : Object.values(typeCounts).reduce((a, b) => a + b, 0)) : null;
+          return (
+            <button
+              key={k || "all"}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setParam({ product_type: k || null })}
+              className={cx("shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium", on ? "border-brand-600 bg-brand-50 text-brand-800" : "border-ink-200 text-ink-700 hover:bg-ink-50")}
+            >
+              {label}{n !== null && <span className="ml-1.5 text-xs text-ink-500">{n.toLocaleString()}</span>}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
         <input

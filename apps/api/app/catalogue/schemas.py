@@ -10,7 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.db.models.catalogue import AVAILABILITY, MEDIA_TYPES, PRODUCT_STATUSES, PRODUCT_TYPES
 
 ProductType = Literal[
-    "game", "dlc", "software", "gift_card", "game_account", "subscription", "hardware", "accessory"
+    "game",
+    "dlc",
+    "software",
+    "gift_card",
+    "game_currency",
+    "game_account",
+    "subscription",
+    "hardware",
+    "accessory",
 ]
 Availability = Literal["in_stock", "out_of_stock", "preorder", "unavailable"]
 MediaType = Literal["cover", "screenshot", "video", "banner", "logo"]

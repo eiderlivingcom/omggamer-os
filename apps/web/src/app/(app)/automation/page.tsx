@@ -35,7 +35,7 @@ type Rules = {
   last_runs?: Record<string, string>;
 };
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const TYPES = ["game", "dlc", "software", "gift_card", "game_account", "subscription"];
+const TYPES = ["game", "dlc", "software", "gift_card", "game_currency", "game_account", "subscription"];
 
 function RulesCard() {
   const [r, setR] = useState<Rules | null>(null);

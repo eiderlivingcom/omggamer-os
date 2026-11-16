@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.catalogue.normalize import edition_of
+from app.catalogue.normalize import edition_of, is_game_currency
 from app.catalogue.schemas import NormalizedOffer, NormalizedProduct
 from app.suppliers.base import NormalizationError
 
@@ -145,6 +145,8 @@ def region_label(region: str | None, country: str | None) -> str:
 def product_type_for(name: str, attrs: dict[str, Any]) -> str:
     if str(attrs.get("steam_app_type") or "").lower() == "dlc":
         return "dlc"
+    if is_game_currency(name) and not _ACCOUNT.search(name):
+        return "game_currency"
     if _GIFT.search(name):
         return "gift_card"
     if _ACCOUNT.search(name):

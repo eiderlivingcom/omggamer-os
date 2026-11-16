@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.ai import settings as ai_settings
-from app.catalogue.normalize import payload_checksum
+from app.catalogue.normalize import payload_checksum, slugify
 from app.core.logging import log
 from app.db.models import (
     Product,
@@ -165,7 +165,13 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
         else "",
         "categories": await category_paths(db, product.id),
         "tags": list(content.tags) if content else [],
-        "images": [{"url": m.source_url, "alt": alt.get(m.source_url, "")} for m in media],
+        "images": image_seo(
+            content.title if content and content.title else product.canonical_title,
+            product.product_type,
+            variants,
+            media,
+            alt,
+        ),
         "attributes": display,
         "variants": [
             {
@@ -434,3 +440,50 @@ class Publisher:
         await self._record_failure(db, sf_id, product_id, message, False)
         await db.commit()
         return PublishOutcome("retry_later", delay=float(min(900, 30 * 2 ** (item.attempts - 1))))
+
+
+TYPE_WORDS = {
+    "game": "Key",
+    "dlc": "DLC Key",
+    "software": "Software Key",
+    "gift_card": "Gift Card",
+    "game_currency": "Game Cash",
+    "game_account": "Account",
+    "subscription": "Subscription",
+}
+
+
+def image_seo(
+    title: str, product_type: str, variants: list[Any], media: list[Any], ai_alt: dict[str, str]
+) -> list[dict[str, str]]:
+    """SEO names for product images: file name, title and alt text describe the product.
+
+    E.g. "age-of-empires-ii-mountain-royals-steam-key-cover.jpg" and "Age of Empires II: The Mountain Royals
+    Steam Key cover". Alt text written in AI Studio (approved content) is used when there is one.
+    """
+    platforms = [v.platform for v in variants if getattr(v, "platform", None)]
+    platform = max(set(platforms), key=platforms.count) if platforms else ""
+    if platform and platform.lower() in title.lower():
+        platform = ""
+    kind = TYPE_WORDS.get(product_type, "")
+    label = " ".join(x for x in (title, platform, kind) if x).strip()
+    out: list[dict[str, str]] = []
+    shot = 0
+    for m in media:
+        if m.media_type == "cover" and not any(o["role"] == "cover" for o in out):
+            role, suffix = "cover", "cover"
+        else:
+            shot += 1
+            role, suffix = "screenshot", f"screenshot {shot}"
+        path = m.source_url.split("?")[0].lower()
+        ext = next((e for e in (".png", ".webp", ".gif", ".jpeg", ".jpg") if path.endswith(e)), ".jpg")
+        out.append(
+            {
+                "url": m.source_url,
+                "alt": (ai_alt.get(m.source_url) or f"{label} {suffix}").strip()[:250],
+                "title": f"{label} {suffix}"[:250],
+                "filename": f"{slugify(f'{label} {suffix}', 120)}{ext}",
+                "role": role,
+            }
+        )
+    return out

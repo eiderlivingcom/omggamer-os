@@ -100,3 +100,26 @@ def variant_key(
 def payload_checksum(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+# In-game currency ("game cash"): V-Bucks, Robux, FC Points, Apex Coins, PUBG UC, Free Fire diamonds,
+# GTA Shark Cards... Named currencies match on their own; generic units (coins, points, gems...) only after
+# an amount, so "Gold Edition" or "Cash Cleaner Simulator" are not caught. Wallet top-ups and store gift
+# cards are not currency.
+GAME_CURRENCY_NAMED = re.compile(
+    r"\b(v-?bucks|robux|minecoins|primogems|genesis crystals|shark\s+(?:cash\s+)?card|virtual currency"
+    r"|in-?game currency|game cash|gta\s?\$)",
+    re.IGNORECASE,
+)
+GAME_CURRENCY_AMOUNT = re.compile(
+    r"\b\d[\d,.]*\s*(?:k\s+)?(?:\+\s*\d[\d,.]*\s*)?(?:bonus\s+)?"
+    r"(?:fc |fifa |apex |valorant |riot |cod |nba |vc |r6 |ultimate team |call of duty |g-)?"
+    r"(?:points|coins|diamonds|gems|crystals|credits|uc|vp|rp|cp|tokens|crowns|platinum|shards|bucks|gold|silver|atoms)\b"
+    r"(?!\s+(?:edition|pack\s+edition|ultimate))",
+    re.IGNORECASE,
+)
+
+
+def is_game_currency(title: str) -> bool:
+    t = title or ""
+    return bool(GAME_CURRENCY_NAMED.search(t) or GAME_CURRENCY_AMOUNT.search(t))

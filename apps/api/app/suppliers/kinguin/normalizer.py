@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.catalogue.normalize import edition_of
+from app.catalogue.normalize import edition_of, is_game_currency
 from app.catalogue.schemas import NormalizedMedia, NormalizedOffer, NormalizedProduct
 from app.suppliers.base import NormalizationError
 
@@ -98,6 +98,8 @@ def product_type_for(name: str, tags: list[str]) -> str:
         return "dlc"
     if "software" in t:
         return "software"
+    if is_game_currency(name) and not _ACCOUNT.search(name):
+        return "game_currency"
     if "prepaid" in t or _GIFT.search(name):
         return "gift_card"
     if _ACCOUNT.search(name):

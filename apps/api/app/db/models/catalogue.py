@@ -40,6 +40,7 @@ PRODUCT_TYPES = (
     "dlc",
     "software",
     "gift_card",
+    "game_currency",
     "game_account",
     "subscription",
     "hardware",

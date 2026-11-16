@@ -31,6 +31,17 @@ async def _suggestion(db: DB, sid: uuid.UUID) -> MatchSuggestion:
     return s
 
 
+@router.get("/catalogue/type-counts", response_model=dict[str, int])
+async def type_counts(db: DB, _: User = require("catalogue:read")) -> dict[str, int]:
+    """Products per type, for the type tabs on the catalogue screen (merged duplicates excluded)."""
+    rows = await db.execute(
+        select(Product.product_type, func.count(Product.id))
+        .where(Product.product_status != "merged")
+        .group_by(Product.product_type)
+    )
+    return {t: int(n) for t, n in rows.tuples().all()}
+
+
 @router.get("/catalogue/matches", response_model=dict[str, Any])
 async def list_matches(
     db: DB,
