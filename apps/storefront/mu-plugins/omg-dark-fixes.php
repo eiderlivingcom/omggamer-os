@@ -336,8 +336,56 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     if (window.MutationObserver) new MutationObserver(render).observe(sel, {childList:true, subtree:true, attributes:true});
     render();
   }
+  /* Variable products: only offer versions that can be bought, and start on the cheapest one.
+     Options with no in-stock variation are removed (native selects and the region dropdown), the cheapest
+     in-stock variation is selected when nothing is chosen yet, and region lists in the hero and specs only
+     name regions that are in stock. */
+  function cleanVariations(){
+    var f = document.querySelector('form.variations_form'); if (!f) return;
+    var vars; try { vars = JSON.parse(f.getAttribute('data-product_variations') || 'null'); } catch (e) { return; }
+    if (!Array.isArray(vars)) return;
+    var ok = vars.filter(function(v){ return v && v.is_in_stock && v.is_purchasable !== false && v.variation_is_active !== false; });
+    if (!ok.length) return;
+    var sels = Array.prototype.slice.call(f.querySelectorAll('select[name^="attribute_"]'));
+    var has = function(name, val){ return ok.some(function(v){ var a = v.attributes || {}; return !a[name] || a[name] === val; }); };
+    var regionSel = sels.filter(function(x){ return /region/.test(x.name); })[0] || null;
+    var allRegions = [], liveRegions = [];
+    sels.forEach(function(sel){
+      Array.prototype.slice.call(sel.options).forEach(function(o){
+        if (!o.value) return;
+        if (sel === regionSel) allRegions.push(o.text.trim());
+        if (!has(sel.name, o.value)) { o.remove(); } else if (sel === regionSel) { liveRegions.push(o.text.trim()); }
+      });
+    });
+    var vis = document.querySelector('#omg-dg-region select');
+    if (vis && regionSel) {
+      Array.prototype.slice.call(vis.options).forEach(function(o){ if (o.value && !has(regionSel.name, o.value)) o.remove(); });
+    }
+    var fire = function(el){ el.dispatchEvent(new Event('change', {bubbles:true})); if (window.jQuery) jQuery(el).trigger('change'); };
+    var chosen = sels.every(function(x){ return x.value && has(x.name, x.value); });
+    if (!chosen) {
+      var best = ok.slice().sort(function(a, b){ return (a.display_price || 0) - (b.display_price || 0); })[0];
+      var at = best.attributes || {};
+      if (vis && regionSel && at[regionSel.name]) { vis.value = at[regionSel.name]; fire(vis); }
+      sels.forEach(function(x){ if (at[x.name] && x.value !== at[x.name]) { x.value = at[x.name]; fire(x); } });
+      var ed = sels.filter(function(x){ return /edition/.test(x.name); })[0];
+      if (ed && at[ed.name]) {
+        document.querySelectorAll('.omg-ed-card').forEach(function(c){ if (c.getAttribute('data-value') === at[ed.name] && !c.classList.contains('is-active')) c.click(); });
+      }
+    }
+    // Region lists such as "EUROPE , EUROPE - all countries , Global" name only regions in stock.
+    if (allRegions.length > 1 && liveRegions.length && liveRegions.length < allRegions.length) {
+      var norm = function(t){ return t.replace(/\s*,\s*/g, ',').replace(/\s+/g, ' ').trim().toLowerCase(); };
+      var full = norm(allRegions.join(','));
+      document.querySelectorAll('.omg-dg-chip, .omg-dg-spec dd, .omg-dg-spec .v, td, dd, span, div').forEach(function(el){
+        if (el.children.length > 3) return;
+        if (norm(el.textContent) === full) el.textContent = liveRegions.join(', ');
+      });
+    }
+  }
   function start(){
     try { optionCards(); } catch (e) {}
+    try { cleanVariations(); } catch (e) {}
     document.querySelectorAll('#omg-dg-region').forEach(dropdown);
     // Gradient words whose fill was flattened to a solid colour.
     document.querySelectorAll('h1 span,h1 b,h2 span,h2 b,span > b,.omg-404-code').forEach(function(e){
