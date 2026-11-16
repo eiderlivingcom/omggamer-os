@@ -164,7 +164,19 @@ final class OMG_Pro_Offer
         self::$in_meta = true;
         try {
             $p = wc_get_product((int) $object_id);
-            $m = $p instanceof WC_Product && !$p->is_type('variable') ? self::member_price($p) : null;
+            if ($p instanceof WC_Product && $p->is_type('variable')) {
+                // Products with versions: use the version that is in the cart.
+                $p = null;
+                if (function_exists('WC') && WC()->cart) {
+                    foreach (WC()->cart->get_cart() as $item) {
+                        if ((int) $item['product_id'] === (int) $object_id && ($item['data'] ?? null) instanceof WC_Product) {
+                            $p = $item['data'];
+                            break;
+                        }
+                    }
+                }
+            }
+            $m = $p instanceof WC_Product ? self::member_price($p) : null;
         } finally {
             self::$in_meta = false;
         }
