@@ -45,7 +45,9 @@ final class OMG_Cart_Pro
 .wc-block-cart .wc-block-components-express-payment,.wc-block-cart .wc-block-components-express-payment-continue-rule,
 .wc-block-mini-cart__footer .wc-block-components-express-payment,#wc-stripe-express-checkout-element,#wc-stripe-express-checkout-button-separator,
 .wc-stripe-product-checkout-container,#wc-stripe-payment-request-wrapper,#wc-stripe-payment-request-button-separator,
-.wc-stripe-express-checkout-element,#wc-stripe-amazon-pay-element,.wc-block-components-express-payment__event-buttons{display:none!important}
+.wc-stripe-express-checkout-element,#wc-stripe-amazon-pay-element,.wc-block-components-express-payment__event-buttons,
+.wp-block-woocommerce-cart-express-payment-block,.wc-block-cart__payment-options .wc-block-components-express-payment,
+[id^="wc-stripe-amazon"],[class*="amazonpay-button"],#pay_with_amazon,#pay_with_amazon_cart{display:none!important}
 </style>
         <?php
     }
