@@ -115,7 +115,8 @@ class OMG_Connector_Orders
             if (!$item) {
                 continue;
             }
-            $stored = (array) $item->get_meta(self::KEY_META, true);
+            $stored = $item->get_meta(self::KEY_META, true);
+            $stored = is_array($stored) ? $stored : [];
             $seen = array_flip(array_map(function ($k) { return md5($k['serial'] ?? ''); }, $stored));
             foreach ((array) ($row['keys'] ?? []) as $key) {
                 $serial = (string) ($key['serial'] ?? '');
@@ -135,7 +136,8 @@ class OMG_Connector_Orders
             if (get_post_meta($pid, '_omg_variant_id', true) === '') {
                 continue;
             }
-            if (count((array) $item->get_meta(self::KEY_META, true)) < (int) $item->get_quantity()) {
+            $have = $item->get_meta(self::KEY_META, true);
+            if (count(is_array($have) ? $have : []) < (int) $item->get_quantity()) {
                 $complete = false;
             }
         }
@@ -169,7 +171,11 @@ class OMG_Connector_Orders
     /** Show keys under each item (order received page, My Account, emails). */
     public static function show_keys($item_id, $item, $order)
     {
-        $keys = (array) $item->get_meta(self::KEY_META, true);
+        // No keys yet is an empty string, not an array: keep only real key records.
+        $raw = $item->get_meta(self::KEY_META, true);
+        $keys = array_values(array_filter(is_array($raw) ? $raw : [], static function ($k) {
+            return is_array($k) && isset($k['serial']) && $k['serial'] !== '';
+        }));
         if (!$keys || !$order || !$order->has_status(['completed', 'processing'])) {
             return;
         }
