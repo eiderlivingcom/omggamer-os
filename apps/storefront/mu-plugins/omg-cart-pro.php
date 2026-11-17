@@ -1,7 +1,8 @@
 <?php
 /**
  * Plugin Name: OMGGamer cart PRO choice and express payment placement
- * Description: Cart page: the same "No PRO / PRO" choice as checkout, above the totals. It follows the cart: PRO in
+ * Description: Cart page: the same "No PRO / PRO" choice as checkout, above the totals, and "Price not final" under
+ *              the total. It follows the cart: PRO in
  *              the cart selects "PRO", otherwise "No PRO"; choosing adds or removes the PRO membership. Express
  *              payment buttons (Apple Pay, Google Pay, Amazon Pay, Link) show only on the checkout page.
  * Version: 1.0.0
@@ -98,11 +99,24 @@ final class OMG_Cart_Pro
     busy = true;
     Promise.resolve(want ? d.addItemToCart(P.id, 1) : d.removeItemFromCart(it.key)).catch(function(err){ if (err && err.message) window.alert(err.message); }).then(function(){ busy = false; paint(); });
   });
+  // Under the cart total: the price can still change at checkout (discount codes, PRO, service fee).
+  function notFinal(){
+    var tot = document.querySelector('.wc-block-cart .wc-block-components-totals-footer-item');
+    if (!tot || tot.parentNode.querySelector('.omg-not-final')) return;
+    var n = document.createElement('div'); n.className = 'omg-not-final';
+    n.innerHTML = 'Price not final <span class="i" tabindex="0" aria-label="The final price is shown at checkout, after discount codes, PRO and the service fee.">i<span class="tip">The final price is shown at checkout, after discount codes, PRO and the service fee.</span></span>';
+    tot.parentNode.insertBefore(n, tot.nextSibling);
+  }
+  var _paint = paint; paint = function(){ _paint(); notFinal(); };
   function start(){ if (!window.wp || !wp.data) return; wp.data.subscribe(function(){ clearTimeout(start.t); start.t = setTimeout(paint, 40); }); paint(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
-<style>.omg-cart-pro{margin:0 0 16px}</style>
+<style>.omg-cart-pro{margin:0 0 16px}
+.omg-not-final{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:4px 0 0;color:#8d84a8;font:600 11px/1.2 Poppins,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.omg-not-final .i{position:relative;display:inline-grid;place-items:center;width:16px;height:16px;border:1.5px solid currentColor;border-radius:50%;font-size:10px;letter-spacing:0;text-transform:none;cursor:help}
+.omg-not-final .tip{display:none;position:absolute;right:0;bottom:calc(100% + 8px);width:240px;padding:10px 12px;border-radius:10px;background:#1d1930;border:1px solid #2a2540;color:#d9d6e8;font:400 12px/1.45 Poppins,system-ui,sans-serif;text-transform:none;letter-spacing:0;z-index:5}
+.omg-not-final .i:hover .tip,.omg-not-final .i:focus .tip{display:block}</style>
         <?php
     }
 }

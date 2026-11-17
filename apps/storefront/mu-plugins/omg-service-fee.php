@@ -57,7 +57,7 @@ final class OMG_Service_Fee
         $base = (float) $cart->get_subtotal() - (float) $cart->get_discount_total() + (float) $cart->get_shipping_total();
         $fee = round(max(0.0, $base) * $rate / 100, wc_get_price_decimals());
         if ($fee > 0) {
-            $cart->add_fee(sprintf('Service fee (%s%%)', rtrim(rtrim(number_format($rate, 2, '.', ''), '0'), '.')), $fee, false);
+            $cart->add_fee('Service fee', $fee, false);
         }
     }
 
