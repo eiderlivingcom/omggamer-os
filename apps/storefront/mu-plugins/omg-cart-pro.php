@@ -20,6 +20,10 @@ final class OMG_Cart_Pro
         add_action('wp_head', [__CLASS__, 'express_css'], 99);
         // Stripe: express buttons only on checkout (product page and cart off), whatever is saved in its settings.
         add_filter('option_woocommerce_stripe_settings', [__CLASS__, 'stripe_locations']);
+        // Classic cart (the Bricks cart template): PRO choice above the totals and "Price not final" under the total.
+        add_action('woocommerce_before_cart_totals', [__CLASS__, 'classic_pro_box']);
+        add_action('woocommerce_cart_totals_after_order_total', [__CLASS__, 'classic_not_final']);
+        add_action('template_redirect', [__CLASS__, 'classic_pro_choice']);
     }
 
     public static function stripe_locations($s)
@@ -34,12 +38,78 @@ final class OMG_Cart_Pro
         return $s;
     }
 
+    private static function pro_key(): string
+    {
+        foreach (WC()->cart ? WC()->cart->get_cart() : [] as $key => $item) {
+            if ((int) ($item['product_id'] ?? 0) === OMG_Pro_Offer::PRODUCT) {
+                return (string) $key;
+            }
+        }
+        return '';
+    }
+
+    /** ?omg_pro=on|off on the cart page adds or removes the PRO membership, then returns to the cart. */
+    public static function classic_pro_choice(): void
+    {
+        if (!isset($_GET['omg_pro']) || !function_exists('is_cart') || !is_cart() || !class_exists('OMG_Pro_Offer') || !WC()->cart) {
+            return;
+        }
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '')), 'omg_pro_choice')) {
+            return;
+        }
+        $want = 'on' === sanitize_key(wp_unslash($_GET['omg_pro']));
+        $key = self::pro_key();
+        if ($want && $key === '') {
+            WC()->cart->add_to_cart(OMG_Pro_Offer::PRODUCT, 1);
+        } elseif (!$want && $key !== '') {
+            WC()->cart->remove_cart_item($key);
+        }
+        wp_safe_redirect(wc_get_cart_url());
+        exit;
+    }
+
+    public static function classic_pro_box(): void
+    {
+        if (!class_exists('OMG_Pro_Offer') || OMG_Pro_Offer::is_member() || !WC()->cart || WC()->cart->is_empty()) {
+            return;
+        }
+        $has = self::pro_key() !== '';
+        $conv = static function (float $v): float {
+            return class_exists('OMG_Markets') && OMG_Markets::applies() ? (float) (OMG_Markets::convert($v) ?? $v) : $v;
+        };
+        $price = (OMG_Pro_Offer::eligible() ? 'First month ' . wc_price($conv((float) OMG_Pro_Offer::FIRST)) . ', then ' : '') . wc_price($conv((float) OMG_Pro_Offer::MONTHLY)) . '/month, cancel anytime.';
+        $url = static fn (string $v) => wp_nonce_url(add_query_arg('omg_pro', $v, wc_get_cart_url()), 'omg_pro_choice');
+        echo '<div class="omgx-pro omg-cart-pro' . ($has ? ' is-on' : '') . '">';
+        echo '<div class="hd"><b>Choose your <span class="pro">PRO</span> benefit</b><span class="tag' . ($has ? '' : ' hot') . '">' . ($has ? 'Added' : 'Best value') . '</span></div>';
+        echo '<div class="seg" role="radiogroup" aria-label="PRO membership">';
+        echo '<a role="radio" aria-checked="' . ($has ? 'false' : 'true') . '" class="' . ($has ? '' : 'is-on') . '" href="' . esc_url($url('off')) . '">No <span class="pro">PRO</span></a>';
+        echo '<a role="radio" aria-checked="' . ($has ? 'true' : 'false') . '" class="' . ($has ? 'is-on' : '') . '" href="' . esc_url($url('on')) . '"><span class="pro">PRO</span></a></div>';
+        echo '<p class="sv">' . ($has ? 'OMG PRO is in your order: member prices on eligible games. ' : 'PRO members get member prices on eligible games. ') . wp_kses_post($price) . ' <a href="' . esc_url(home_url('/pro/')) . '" target="_blank" rel="noopener">How PRO works</a></p>';
+        echo '</div>';
+    }
+
+    public static function classic_not_final(): void
+    {
+        $tip = 'The final price is shown at checkout, after discount codes, PRO and the service fee.';
+        echo '<tr class="omg-not-final-row"><td colspan="2"><div class="omg-not-final">Price not final <span class="i" tabindex="0" aria-label="' . esc_attr($tip) . '">i<span class="tip">' . esc_html($tip) . '</span></span></div></td></tr>';
+    }
+
     public static function express_css(): void
     {
         if (function_exists('is_checkout') && is_checkout()) {
             return;
         }
         ?>
+<style id="omg-cart-pro-css">
+.omg-cart-pro{margin:0 0 16px}
+.omgx-pro .seg a{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none!important;cursor:pointer;padding:11px 10px;border-radius:999px;font-weight:600;font-size:15px;color:#a79ec0!important}
+.omgx-pro .seg a.is-on{color:#f4f2fb!important;background:#1d1930;box-shadow:inset 0 0 0 2px #8b5cf6,0 8px 22px -10px rgba(139,92,246,.9)}
+.omg-not-final-row td{padding-top:0!important;border:0!important}
+.omg-not-final{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:4px 0 0;color:#8d84a8;font:600 11px/1.2 Poppins,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.omg-not-final .i{position:relative;display:inline-grid;place-items:center;width:16px;height:16px;border:1.5px solid currentColor;border-radius:50%;font-size:10px;letter-spacing:0;text-transform:none;cursor:help}
+.omg-not-final .tip{display:none;position:absolute;right:0;bottom:calc(100% + 8px);width:240px;padding:10px 12px;border-radius:10px;background:#1d1930;border:1px solid #2a2540;color:#d9d6e8;font:400 12px/1.45 Poppins,system-ui,sans-serif;text-transform:none;letter-spacing:0;z-index:5}
+.omg-not-final .i:hover .tip,.omg-not-final .i:focus .tip{display:block}
+</style>
 <style id="omg-express-only-checkout">
 /* Express payments (Apple Pay, Google Pay, Amazon Pay, Link) are offered at checkout only. */
 .wc-block-cart .wc-block-components-express-payment,.wc-block-cart .wc-block-components-express-payment-continue-rule,
