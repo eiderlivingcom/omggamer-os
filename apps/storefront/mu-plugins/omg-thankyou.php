@@ -67,7 +67,7 @@ final class OMG_Thankyou
             return;
         }
 
-        $first = trim((string) $order->get_billing_first_name());
+        $first = ucfirst(trim((string) $order->get_billing_first_name()));
         $email = (string) $order->get_billing_email();
         $paid = $order->is_paid() || (float) $order->get_total() <= 0;
         $digital_waiting = false;
