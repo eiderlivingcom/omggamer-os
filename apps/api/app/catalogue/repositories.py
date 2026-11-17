@@ -250,6 +250,9 @@ class ProductRepository:
                     SupplierProduct.product_id == Product.id, SupplierProduct.external_product_id == term
                 ),
                 exists().where(ProductVariant.product_id == Product.id, ProductVariant.sku == term),
+                Product.sku == term.upper(),
+                exists().where(ProductVariant.product_id == Product.id, ProductVariant.sku == term.upper()),
+                exists().where(SupplierProduct.product_id == Product.id, SupplierProduct.sku == term.upper()),
             ]
             try:
                 conds_q.append(Product.id == uuid.UUID(term))

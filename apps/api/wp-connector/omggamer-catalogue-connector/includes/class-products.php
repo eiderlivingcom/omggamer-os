@@ -61,7 +61,7 @@ class OMG_Connector_Products
         // A product that is live on the store keeps everything the store has (title, descriptions, images, video,
         // attributes, categories, tags, SEO): OMGGamer OS only updates its prices and stock.
         if ($id && get_post_status($id) === 'publish' && self::content_locked() && empty($p['replace_content'])) {
-            return $this->update_live_prices($id, $variants);
+            return $this->update_live_prices($id, $variants, (string) ($p['sku'] ?? ''));
         }
         if ($id && get_post_status($id) === 'trash') {
             wp_untrash_post($id);
@@ -109,6 +109,8 @@ class OMG_Connector_Products
             $v = $variants[0];
             $this->apply_sku($product, $v['sku'] ?? '');
             $this->apply_price($product, $v);
+        } elseif (!empty($p['sku'])) {
+            $this->apply_sku($product, $p['sku']); // the game code (OMG-G004218) on the parent product
         }
         $product_id = $product->save();
         if (!$product_id) {
@@ -173,9 +175,17 @@ class OMG_Connector_Products
     }
 
     /** Prices and stock of a published product; variants are matched by OMGGamer variant ID, else by options. */
-    private function update_live_prices($product_id, array $variants)
+    private function update_live_prices($product_id, array $variants, $product_sku = '')
     {
         $variable = WC_Product_Factory::get_product_type($product_id) === 'variable';
+        // SKUs are identifiers, not content: keep them in step with OMGGamer OS.
+        if ($variable && $product_sku !== '') {
+            $parent = wc_get_product($product_id);
+            if ($parent) {
+                $this->apply_sku($parent, $product_sku);
+                $parent->save();
+            }
+        }
         $map = [];
         foreach ($variants as $v) {
             $vid = sanitize_text_field($v['variant_id'] ?? '');
@@ -194,6 +204,7 @@ class OMG_Connector_Products
                 $this->warnings[] = 'No matching option on the store for ' . implode(' / ', array_map('strval', (array) ($v['attributes'] ?? []))) . '; not added (content is locked).';
                 continue;
             }
+            $this->apply_sku($target, $v['sku'] ?? '');
             $this->apply_price($target, $v);
             $target->save();
             $map[$vid] = $target_id;

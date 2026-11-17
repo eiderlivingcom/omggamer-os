@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -29,6 +29,7 @@ from app.db.models import (
     PublishingQueueItem,
     Storefront,
     StorefrontProductMapping,
+    SupplierOffer,
     SupplierProduct,
     SyncLog,
 )
@@ -118,6 +119,19 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
     keep = {v.id for v in best.values()}
     variants = [v for v in variants if v.id in keep]
 
+    in_stock = await db.scalar(
+        select(
+            exists().where(
+                SupplierOffer.variant_id == ProductVariant.id,
+                ProductVariant.product_id == product.id,
+                SupplierOffer.availability_status.in_(("in_stock", "preorder")),
+                SupplierOffer.available_quantity > 0,
+            )
+        )
+    )
+    if status == "publish" and not in_stock:
+        # A game nobody can supply is never put live on the store.
+        raise PublishError("This game has 0 offers in stock from any supplier, so it was not published.")
     if status == "publish" and not any(p.selling_price is not None for p in prices.values()):
         raise PublishError(
             "No variant has a selling price. Add a pricing rule (Pricing) and make sure an offer is in stock."
@@ -186,6 +200,7 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
 
     return {
         "external_id": str(product.id),
+        "sku": product.sku,
         "name": content.title if content and content.title else product.canonical_title,
         "slug": product.slug,
         "status": status,

@@ -353,7 +353,7 @@ function Catalogue() {
                         <span className="min-w-0">
                           <span className="block truncate font-semibold text-ink-900 hover:text-brand-700">{p.canonical_title}</span>
                           <span className="block truncate font-mono text-[11px] text-ink-500">
-                            {p.external_ids.length ? `ID ${p.external_ids.slice(0, 3).join(", ")}${p.external_ids.length > 3 ? ` +${p.external_ids.length - 3}` : ""}` : "—"}
+                            {p.sku ? `${p.sku} · ` : ""}{p.external_ids.length ? `ID ${p.external_ids.slice(0, 3).join(", ")}${p.external_ids.length > 3 ? ` +${p.external_ids.length - 3}` : ""}` : "—"}
                             {p.editions.length > 0 && ` · ${p.editions.join(", ")}`}
                           </span>
                         </span>

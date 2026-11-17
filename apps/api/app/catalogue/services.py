@@ -13,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.catalogue import sku
 from app.catalogue.matching import find_by_alias, suggest_for
 from app.catalogue.normalize import base_title, match_key, payload_checksum, slugify, variant_key
 from app.catalogue.repositories import (
@@ -104,6 +105,7 @@ class CatalogueService:
         sp.product_id = product.id
         sp.variant_id = variant.id
         sp.import_status = "new" if created else "updated"
+        await sku.assign_supplier_product(self.db, sp)
 
         offer_rows = [
             {
@@ -168,6 +170,7 @@ class CatalogueService:
             product_status="draft",
         )
         self.db.add(product)
+        await sku.assign_product(self.db, product)
         await self.db.flush()
         return product, True
 
@@ -178,10 +181,9 @@ class CatalogueService:
             if item.variant_attributes:
                 found.variant_attributes = {**found.variant_attributes, **item.variant_attributes}
             return found, False
-        parts = [product.slug, item.platform, item.edition, item.region, item.activation_type]
         variant = ProductVariant(
             product_id=product.id,
-            sku=await self.variants.unique_sku("-".join(p for p in parts if p)),
+            sku=await sku.new_variant_sku(self.db, product, item.platform, item.region, item.edition),
             platform=item.platform,
             edition=item.edition,
             region=item.region,
@@ -226,6 +228,7 @@ class CatalogueService:
             twin = await self.variants.by_key(target.id, v.variant_key)
             if twin is None:
                 v.product_id = target.id
+                await sku.assign_variant(self.db, target, v)  # re-coded under the target's game code
                 continue
             await self.db.execute(
                 update(SupplierOffer).where(SupplierOffer.variant_id == v.id).values(variant_id=twin.id)
@@ -241,6 +244,7 @@ class CatalogueService:
             .where(SupplierProduct.product_id == source.id)
             .values(product_id=target.id)
         )
+        await sku.refresh_product(self.db, target)
         mappings = (
             (
                 await self.db.execute(

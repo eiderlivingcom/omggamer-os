@@ -8,7 +8,7 @@ import uuid
 from collections import Counter
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.schemas import BulkIn, BulkResult
@@ -20,8 +20,10 @@ from app.db.models import (
     Product,
     ProductCategory,
     ProductContent,
+    ProductVariant,
     PublishingQueueItem,
     Storefront,
+    SupplierOffer,
     User,
 )
 from app.db.models.jobs import ACTIVE_JOB_STATUSES
@@ -178,6 +180,8 @@ class BulkService:
             await self._approve(p, body)
         if p.product_status not in ("approved", "published", "unpublished"):
             return "not_approved"
+        if not await self._has_offers(p.id):
+            return "no_offers_in_stock"  # never put live without something to sell
         sf = await default_storefront(self.db, body.storefront)
         busy = await self.db.scalar(
             select(PublishingQueueItem.id)
@@ -203,6 +207,20 @@ class BulkService:
         await self.db.flush()
         self.publish_ids.append(item.id)
         return "changed"
+
+    async def _has_offers(self, product_id: uuid.UUID) -> bool:
+        return bool(
+            await self.db.scalar(
+                select(
+                    exists().where(
+                        SupplierOffer.variant_id == ProductVariant.id,
+                        ProductVariant.product_id == product_id,
+                        SupplierOffer.availability_status.in_(("in_stock", "preorder")),
+                        SupplierOffer.available_quantity > 0,
+                    )
+                )
+            )
+        )
 
     async def _retry_failed(self, p: Product, body: BulkIn) -> str:
         perms = permissions_for(self.actor.role.key)

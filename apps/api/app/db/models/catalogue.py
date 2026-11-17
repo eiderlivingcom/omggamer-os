@@ -118,6 +118,8 @@ class Product(UUIDPk, Timestamps, Base):
     publisher: Mapped[str | None] = mapped_column(String(300))
     release_date: Mapped[date | None] = mapped_column(Date)
     product_status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft", index=True)
+    # OMGGamer game code, e.g. OMG-G004218 (app.catalogue.sku). Set once, never reused.
+    sku: Mapped[str | None] = mapped_column(String(24), unique=True)
 
 
 class ProductVariant(UUIDPk, Timestamps, Base):
@@ -165,6 +167,8 @@ class SupplierProduct(UUIDPk, Timestamps, Base):
     payload_checksum: Mapped[str | None] = mapped_column(String(64))
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     import_status: Mapped[str] = mapped_column(String(20), nullable=False, default="new", index=True)
+    # Supplier listing code: the variant SKU plus the supplier, e.g. OMG-G004218-STM-EU-STD-KG.
+    sku: Mapped[str | None] = mapped_column(String(180), index=True)
 
 
 class SupplierOffer(UUIDPk, Timestamps, Base):

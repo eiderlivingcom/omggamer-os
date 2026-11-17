@@ -184,6 +184,7 @@ export default function ProductPage() {
             <ProductStatus value={p.product_status} />
             <AiStatus value={c?.content_status ?? null} />
             <Pill>{p.product_type.replace("_", " ")}</Pill>
+            {p.sku && <span className="rounded bg-ink-900 px-2 py-0.5 font-mono text-xs font-semibold text-white" title="OMGGamer SKU">{p.sku}</span>}
             <span className="font-mono text-xs text-ink-500">
               {p.supplier_products.map((s) => `${s.supplier_code} ${s.external_product_id}`).join(" · ")}
             </span>

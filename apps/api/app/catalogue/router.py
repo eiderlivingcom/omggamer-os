@@ -109,6 +109,7 @@ async def list_products(
         items=[
             ProductListItem(
                 id=p.id,
+                sku=p.sku,
                 canonical_title=p.canonical_title,
                 slug=p.slug,
                 product_type=p.product_type,
@@ -153,6 +154,7 @@ async def _detail(db: DB, p: Product) -> ProductDetail:
 
     return ProductDetail(
         id=p.id,
+        sku=p.sku,
         master_product_id=p.master_product_id,
         canonical_title=p.canonical_title,
         slug=p.slug,
@@ -170,6 +172,7 @@ async def _detail(db: DB, p: Product) -> ProductDetail:
         supplier_products=[
             SupplierProductOut(
                 id=sp.id,
+                sku=sp.sku,
                 supplier_code=code,
                 external_product_id=sp.external_product_id,
                 external_product_set_id=sp.external_product_set_id,
@@ -302,6 +305,7 @@ async def get_supplier_product(
     sp, code = row
     return SupplierProductDetail(
         id=sp.id,
+        sku=sp.sku,
         supplier_code=code,
         external_product_id=sp.external_product_id,
         external_product_set_id=sp.external_product_set_id,

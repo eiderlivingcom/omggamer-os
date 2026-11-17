@@ -130,6 +130,7 @@ class VariantOut(ORM):
 
 class SupplierProductOut(ORM):
     id: uuid.UUID
+    sku: str | None = None
     supplier_code: str
     external_product_id: str
     external_product_set_id: str | None
@@ -182,6 +183,7 @@ class ContentOut(ORM):
 
 class ProductListItem(BaseModel):
     id: uuid.UUID
+    sku: str | None = None
     canonical_title: str
     slug: str
     product_type: str
@@ -213,6 +215,7 @@ class ProductPage(BaseModel):
 
 class ProductDetail(BaseModel):
     id: uuid.UUID
+    sku: str | None = None
     master_product_id: uuid.UUID | None
     canonical_title: str
     slug: str

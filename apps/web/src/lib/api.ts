@@ -131,6 +131,7 @@ export type ImportLog = { id: number; level: "info" | "warning" | "error"; messa
 export type ImportFailure = { id: string; external_product_id: string; error: string; attempts: number; created_at: string };
 
 export type ProductListItem = {
+  sku?: string | null;
   id: string;
   canonical_title: string;
   slug: string;
@@ -211,6 +212,7 @@ export type Content = {
   [k: string]: unknown;
 };
 export type ProductDetail = {
+  sku?: string | null;
   id: string;
   master_product_id: string | null;
   canonical_title: string;
