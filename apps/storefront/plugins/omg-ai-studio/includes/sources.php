@@ -36,7 +36,16 @@ final class OMG_PS_Sources {
 
 	/** True when the OMGGamer catalogue connector is set up (it holds the OS address, storefront code and secret). */
 	public static function os_ready() {
-		return '' !== (string) get_option( 'omg_connector_secret', '' ) && '' !== (string) get_option( 'omg_connector_storefront', '' );
+		return '' !== (string) get_option( 'omg_connector_secret', '' ) && '' !== self::os_code();
+	}
+
+	/**
+	 * The storefront code in OMGGamer OS. AI Studio keeps its own copy so reading product data does not switch on
+	 * the connector's checkout checks and order sending (which use the connector's own storefront code).
+	 */
+	public static function os_code() {
+		$c = trim( (string) OMG_PS::settings()['os_storefront'] );
+		return '' !== $c ? $c : (string) get_option( 'omg_connector_storefront', '' );
 	}
 
 	/**
@@ -52,7 +61,7 @@ final class OMG_PS_Sources {
 		$title = '' !== $title ? $title : get_the_title( $post_id );
 		$body  = wp_json_encode( $os_id ? array( 'product_id' => $os_id, 'title' => $title ) : array( 'title' => $title ) );
 		$base  = rtrim( (string) get_option( 'omg_connector_os_url', 'https://os.omggamer.com' ), '/' );
-		$code  = rawurlencode( (string) get_option( 'omg_connector_storefront', '' ) );
+		$code  = rawurlencode( self::os_code() );
 		$ts    = (string) time();
 		$res   = wp_remote_post( $base . '/api/v1/webhooks/storefronts/' . $code . '/product-facts', array(
 			'timeout' => 30,

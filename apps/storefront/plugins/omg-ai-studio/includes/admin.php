@@ -69,6 +69,7 @@ final class OMG_PS_Admin {
 		$out['review_rule']     = isset( $in['review_rule'] ) && 'auto' === $in['review_rule'] ? 'auto' : 'human';
 		$out['margin']          = isset( $in['margin'] ) ? max( 0, min( 300, (float) $in['margin'] ) ) : 18;
 		$out['auto_rewrite']    = empty( $in['auto_rewrite'] ) ? 0 : 1;
+		$out['os_storefront']   = isset( $in['os_storefront'] ) ? sanitize_key( $in['os_storefront'] ) : $out['os_storefront'];
 		$out['prompt_short']    = isset( $in['prompt_short'] ) ? mb_substr( sanitize_textarea_field( $in['prompt_short'] ), 0, 3000 ) : $out['prompt_short'];
 		$out['prompt_long']     = isset( $in['prompt_long'] ) ? mb_substr( sanitize_textarea_field( $in['prompt_long'] ), 0, 3000 ) : $out['prompt_long'];
 		$map = array();
@@ -134,7 +135,7 @@ final class OMG_PS_Admin {
 				<div class="omgps-card"><h2>Product data sources</h2><table class="form-table" role="presentation">
 					<?php $this->secret_row( 'Kinguin API key', 'kinguin_key', '' !== OMG_PS::kinguin_key(), defined( 'OMG_KINGUIN_API_KEY' ) && OMG_KINGUIN_API_KEY, 'From your Kinguin Integration account (eCommerce API). Used to search products, read price, stock and product data. You can define <code>OMG_KINGUIN_API_KEY</code> in wp-config.php instead.' ); ?>
 					<tr><th>Kinguin sandbox</th><td><label><input type="checkbox" name="<?php echo $n; ?>[kinguin_sandbox]" value="1" <?php checked( $s['kinguin_sandbox'], 1 ); ?>> Use the Kinguin sandbox (for testing)</label></td></tr>
-					<tr><th>OMGGamer OS</th><td><p><?php echo OMG_PS_Sources::os_ready() ? 'Connected through the OMGGamer Catalogue Connector. Game pages are written from the OS data (all suppliers, attributes, requirements).' : 'Not connected. Set up the OMGGamer Catalogue Connector so game data comes from os.omggamer.com.'; ?></p></td></tr>
+					<tr><th><label for="omg-os-code">OMGGamer OS storefront code</label></th><td><input id="omg-os-code" type="text" class="regular-text" name="<?php echo $n; ?>[os_storefront]" value="<?php echo esc_attr( $s['os_storefront'] ); ?>" placeholder="omggamer-staging"><p class="description"><?php echo OMG_PS_Sources::os_ready() ? 'Connected. Game pages are written from the OMGGamer OS data (all suppliers, attributes, requirements), signed with the catalogue connector secret.' : 'Not connected. Enter this store&rsquo;s code from OMGGamer OS (Publishing &rarr; Storefronts); the catalogue connector secret must be set.'; ?> Only used to read product data; it does not change checkout or order sending.</p></td></tr>
 					<tr><th>Steam Store</th><td><p>Connected. Steam's public store API needs no key: the studio reads system requirements, genres, credits and the release date.</p></td></tr>
 					<tr><th><label for="omg-icecat">Icecat username</label></th><td><input id="omg-icecat" type="text" class="regular-text" name="<?php echo $n; ?>[icecat_user]" value="<?php echo esc_attr( $s['icecat_user'] ); ?>"><p class="description">Free Open Icecat account, used to look up hardware and accessories by EAN.</p></td></tr>
 				</table></div>

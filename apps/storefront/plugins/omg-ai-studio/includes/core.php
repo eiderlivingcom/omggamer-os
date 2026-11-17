@@ -41,6 +41,7 @@ final class OMG_PS {
 			'margin'          => 18,
 			'auto_rewrite'    => 1,
 			// Custom prompts for the short and full description. {title} is replaced with the product title.
+			'os_storefront'   => '',
 			'prompt_short'    => '',
 			'prompt_long'     => '',
 		);
