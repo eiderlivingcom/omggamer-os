@@ -245,3 +245,24 @@ async def availability(
     results = await service.check_availability(db, sf, ids, live=live)
     await db.commit()
     return {"ok": True, "items": results, "checked_at": _now().isoformat()}
+
+
+class FactsIn(BaseModel):
+    product_id: str | None = Field(default=None, max_length=64)
+    title: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/webhooks/storefronts/{code}/product-facts", response_model=dict[str, Any])
+async def product_facts(code: str, request: Request, db: DB) -> dict[str, Any]:
+    """Everything OMGGamer OS knows about a product, for the storefront's AI Studio (signed like orders)."""
+    from app.sync import facts
+
+    _, body = await verify_storefront(request, db, code)
+    try:
+        data = FactsIn.model_validate_json(body)
+    except Exception as exc:
+        raise AppError(422, "validation_error", "Send product_id (the OS product ID) or title.") from exc
+    product = await facts.find_product(db, data.product_id, data.title)
+    if product is None:
+        raise AppError(404, "not_found", "This product is not in OMGGamer OS.")
+    return await facts.product_facts(db, product)

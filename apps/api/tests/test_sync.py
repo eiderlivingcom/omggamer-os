@@ -274,3 +274,36 @@ async def test_sync_settings_and_schedule(
         await db.commit()
     await tasks._sync_tick()
     assert started.count("run") == 2
+
+
+async def test_product_facts_for_storefront_ai_studio(
+    client: AsyncClient, make_user: MakeUser, store: PriceStore, sent: list[tuple[str, Any]]
+) -> None:
+    await make_user()
+    await login(client)
+    await publish(client, store, sent)
+    async with get_sessionmaker()() as db:
+        product = (await db.execute(select(ProductVariant))).scalars().first()
+        assert product is not None
+        pid = str(product.product_id)
+
+    def call(payload: dict[str, Any], secret: str) -> Any:
+        body = json.dumps(payload).encode()
+        t = int(time.time())
+        sig = hmac.new(secret.encode(), f"{t}.".encode() + body, hashlib.sha256).hexdigest()
+        return client.post(
+            "/api/v1/webhooks/storefronts/omggamer-staging/product-facts",
+            content=body,
+            headers={"X-OMG-Timestamp": str(t), "X-OMG-Signature": sig, "content-type": "application/json"},
+        )
+
+    client.cookies.clear()
+    assert (await call({"product_id": pid}, "wrong")).status_code == 401
+    r = await call({"product_id": pid}, store.secret)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["os_product_id"] == pid and d["suppliers"] and "platforms" in d["facts"]
+    assert "price" not in json.dumps(d).lower()  # prices and stock are never sent
+    by_title = await call({"title": d["title"]}, store.secret)
+    assert by_title.status_code == 200 and by_title.json()["os_product_id"] == pid
+    assert (await call({"title": "no such game anywhere"}, store.secret)).status_code == 404
