@@ -3,7 +3,7 @@
 # Run as root:  sh install.sh [/var/www/<site>]
 set -eu
 SRC=$(cd "$(dirname "$0")" && pwd)
-DST=${1:-/var/www/omggamer2-9tw2.1wp.site}
+DST=${1:-/var/www/omggamer.com}
 [ -f "$DST/wp-config.php" ] || { echo "No WordPress at $DST" >&2; exit 1; }
 U=$(stat -c %U "$DST/wp-config.php")
 G=$(stat -c %G "$DST/wp-config.php")
