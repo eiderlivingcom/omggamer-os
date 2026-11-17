@@ -102,6 +102,9 @@ final class OMG_Cart_Pro
         ?>
 <style id="omg-cart-pro-css">
 .omg-cart-pro{margin:0 0 16px}
+.omg-cart-pro .hd b{color:#fff!important;font-size:17px}
+.omg-cart-pro .sv{color:#a79ec0!important;font-size:13px!important;line-height:1.5!important}
+.omg-cart-pro .sv a{color:#c4b5fd!important}
 .omgx-pro .seg a{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none!important;cursor:pointer;padding:11px 10px;border-radius:999px;font-weight:600;font-size:15px;color:#a79ec0!important}
 .omgx-pro .seg a.is-on{color:#f4f2fb!important;background:#1d1930;box-shadow:inset 0 0 0 2px #8b5cf6,0 8px 22px -10px rgba(139,92,246,.9)}
 .omg-not-final-row td{padding-top:0!important;border:0!important}
