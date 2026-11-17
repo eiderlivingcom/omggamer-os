@@ -24,8 +24,9 @@ async def main(code: str) -> None:
         client = ConnectorClient(sf, max_attempts=1, timeout=30)
         try:
             st = await client.status()
-            print("OS -> store: OK", {k: st.get(k) for k in ("plugin_version", "woocommerce", "site_url", "storefront")})
-        except Exception as exc:  # noqa: BLE001 - report any failure
+            keys = ("plugin_version", "woocommerce", "site_url", "storefront")
+            print("OS -> store: OK", {k: st.get(k) for k in keys})
+        except Exception as exc:
             print("OS -> store: FAILED", type(exc).__name__, str(exc)[:300])
         finally:
             await client.aclose()
