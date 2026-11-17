@@ -6,7 +6,11 @@ import { Button, Card, Empty, Notice, PageHeader, Pill, Stat, cx, fmtDate } from
 import { api, ApiError } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
+type Provider = "openai" | "omniroute";
 type Settings = {
+  provider: Provider;
+  base_url: string;
+  json_mode: "auto" | "schema" | "json_object";
   model: string;
   temperature: number;
   send_temperature: boolean;
@@ -22,7 +26,7 @@ type Settings = {
 };
 type Overview = {
   paused: boolean;
-  key: { configured: boolean; status: string; last_error: string | null };
+  key: { provider: Provider; label: string; configured: boolean; status: string; last_error: string | null };
   settings: Settings;
   prompt_version: number;
   jobs: Record<string, number>;
@@ -120,14 +124,14 @@ export default function AiStudioPage() {
     <>
       <PageHeader
         title="AI Studio"
-        description="Generates OMGGamer product copy from supplier facts with OpenAI. Original supplier data is never changed, and every result waits for approval."
-        actions={ov && <Pill tone={ov.paused ? "warn" : ov.key.status === "connected" ? "ok" : "muted"}>{ov.paused ? "Paused" : ov.key.configured ? `OpenAI · ${ov.settings.model}` : "No OpenAI key"}</Pill>}
+        description="Generates OMGGamer product copy from supplier facts with the AI provider chosen in Settings (OpenAI, or free models through OmniRoute). Original supplier data is never changed, and every result waits for approval."
+        actions={ov && <Pill tone={ov.paused ? "warn" : ov.key.status === "connected" ? "ok" : "muted"}>{ov.paused ? "Paused" : ov.key.configured ? `${ov.key.label} · ${ov.settings.model}` : `No ${ov.key.label} key`}</Pill>}
       />
       {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
       {notice && <div className="mb-4"><Notice tone="ok">{notice}</Notice></div>}
       {ov && !ready && (
         <div className="mb-4">
-          <Notice>Add the OpenAI API key under <Link className="font-semibold underline" href="/settings/credentials">Settings → API credentials</Link>.</Notice>
+          <Notice>Add the {ov.key.label} API key under <Link className="font-semibold underline" href="/settings/credentials">Settings → API credentials</Link>.</Notice>
         </div>
       )}
 
@@ -259,7 +263,7 @@ export default function AiStudioPage() {
                   </tbody>
                 </table>
               )}
-              <p className="mt-3 text-xs text-ink-500">Costs use the per-model prices in Settings. Check them against your OpenAI price list.</p>
+              <p className="mt-3 text-xs text-ink-500">Costs use the per-model prices in Settings. Check them against your provider&apos;s price list (free models through OmniRoute cost 0).</p>
             </>
           )}
         </Card>
@@ -270,6 +274,16 @@ export default function AiStudioPage() {
     </>
   );
 }
+
+const PROVIDERS: Record<Provider, { label: string; base_url: string; model: string; modelHint: string }> = {
+  openai: { label: "OpenAI", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", modelHint: "An OpenAI model name, e.g. gpt-4o-mini." },
+  omniroute: {
+    label: "OmniRoute (free models)",
+    base_url: "https://omniroute.1wp.site/v1",
+    model: "free-stack",
+    modelHint: "A combo name from OmniRoute → Combos (free-stack falls back between its Gemini models), or one model such as gemini/gemini-3.8-flash.",
+  },
+};
 
 function SettingsForm({ initial, onSaved }: { initial: Settings; onSaved: () => Promise<void> }) {
   const [s, setS] = useState(initial);
@@ -298,9 +312,36 @@ function SettingsForm({ initial, onSaved }: { initial: Settings; onSaved: () => 
   return (
     <Card title="AI settings">
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block text-xs font-semibold text-ink-700 sm:col-span-2">
+        <label className="block text-xs font-semibold text-ink-700">
+          Provider
+          <select
+            value={s.provider}
+            onChange={(e) => {
+              const provider = e.target.value as Provider;
+              setS({ ...s, provider, base_url: "", model: PROVIDERS[provider].model });
+            }}
+            className="mt-1 h-9 w-full rounded-md border border-ink-200 bg-white px-2 text-sm font-normal"
+          >
+            {(Object.keys(PROVIDERS) as Provider[]).map((k) => <option key={k} value={k}>{PROVIDERS[k].label}</option>)}
+          </select>
+        </label>
+        <label className="block text-xs font-semibold text-ink-700">
           Model
           <input value={s.model} onChange={(e) => setS({ ...s, model: e.target.value })} className="mt-1 h-9 w-full rounded-md border border-ink-200 px-2 text-sm font-normal" />
+          <span className="mt-1 block font-normal text-ink-500">{PROVIDERS[s.provider].modelHint}</span>
+        </label>
+        <label className="block text-xs font-semibold text-ink-700">
+          API address
+          <input value={s.base_url} placeholder={PROVIDERS[s.provider].base_url} onChange={(e) => setS({ ...s, base_url: e.target.value.trim() })} className="mt-1 h-9 w-full rounded-md border border-ink-200 px-2 text-sm font-normal" />
+          <span className="mt-1 block font-normal text-ink-500">Leave empty for the standard address.</span>
+        </label>
+        <label className="block text-xs font-semibold text-ink-700">
+          Output format
+          <select value={s.json_mode} onChange={(e) => setS({ ...s, json_mode: e.target.value as Settings["json_mode"] })} className="mt-1 h-9 w-full rounded-md border border-ink-200 bg-white px-2 text-sm font-normal">
+            <option value="auto">Automatic (recommended)</option>
+            <option value="schema">Strict JSON schema</option>
+            <option value="json_object">Plain JSON (for models without schema support)</option>
+          </select>
         </label>
         {num("temperature", "Temperature", 0.1, 0, 2)}
         <label className="flex items-end gap-2 pb-2 text-sm text-ink-700">

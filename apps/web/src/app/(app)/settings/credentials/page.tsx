@@ -88,14 +88,14 @@ function ConnectionRow({ code, hint, c, active, onSaved }: { code: string; hint:
   );
 }
 
-type AiCred = { configured: boolean; status: string; last_checked_at: string | null; last_error: string | null };
+type AiCred = { provider: string; label: string; configured: boolean; status: string; last_checked_at: string | null; last_error: string | null };
 
-function OpenAiCard() {
+function AiKeyCard({ provider, title, placeholder, note }: { provider: "openai" | "omniroute"; title: string; placeholder: string; note: string }) {
   const [cred, setCred] = useState<AiCred | null>(null);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
-  const load = useCallback(() => api<AiCred>("/ai/credentials").then(setCred).catch(() => undefined), []);
+  const load = useCallback(() => api<AiCred>(`/ai/credentials?provider=${provider}`).then(setCred).catch(() => undefined), [provider]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -105,9 +105,9 @@ function OpenAiCard() {
     setBusy(true);
     setMsg(null);
     try {
-      await api("/ai/credentials", { method: "PUT", json: { api_key: key } });
+      await api("/ai/credentials", { method: "PUT", json: { api_key: key, provider } });
       setKey("");
-      const t = await api<{ ok: boolean; message: string }>("/ai/credentials/test", { method: "POST" });
+      const t = await api<{ ok: boolean; message: string }>(`/ai/credentials/test?provider=${provider}`, { method: "POST" });
       setMsg({ tone: t.ok ? "ok" : "bad", text: t.ok ? `Saved. ${t.message}` : `Saved, but the test failed: ${t.message}` });
       await load();
     } catch (err) {
@@ -119,7 +119,7 @@ function OpenAiCard() {
 
   const s = STATUS[cred?.status ?? "not_configured"] ?? NOT_SET;
   return (
-    <Card title="OpenAI" aside={<Pill tone={s.tone}>{s.label}</Pill>}>
+    <Card title={title} aside={<Pill tone={s.tone}>{s.label}</Pill>}>
       {cred?.last_error && cred.status === "failed" && <p className="mb-3 text-xs text-rose-700">{cred.last_error}</p>}
       <form onSubmit={save} className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex-1">
@@ -128,7 +128,7 @@ function OpenAiCard() {
             type="password"
             autoComplete="off"
             spellCheck={false}
-            placeholder={cred?.configured ? "•••••••• stored — enter a new key to replace it" : "sk-…"}
+            placeholder={cred?.configured ? "•••••••• stored — enter a new key to replace it" : placeholder}
             value={key}
             onChange={(e) => setKey(e.target.value)}
             minLength={20}
@@ -138,7 +138,7 @@ function OpenAiCard() {
         <Button type="submit" disabled={busy || key.length < 20}>{busy ? "Saving…" : "Save and test"}</Button>
       </form>
       {msg && <div className="mt-3"><Notice tone={msg.tone}>{msg.text}</Notice></div>}
-      <p className="mt-3 text-xs text-ink-500">Used by AI Studio. Model, limits and costs are set in AI Studio → Settings.</p>
+      <p className="mt-3 text-xs text-ink-500">{note}</p>
     </Card>
   );
 }
@@ -215,7 +215,8 @@ export default function CredentialsPage() {
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-6">
       {SUPPLIERS.map((sp) => <SupplierCard key={sp.code} {...sp} />)}
-      <OpenAiCard />
+      <AiKeyCard provider="openai" title="OpenAI" placeholder="sk-…" note="Used by AI Studio when the provider is OpenAI. Model, limits and costs are set in AI Studio → Settings." />
+      <AiKeyCard provider="omniroute" title="OmniRoute (free models)" placeholder="Key from OmniRoute → API Keys" note="Used by AI Studio when the provider is OmniRoute. Create the key in the OmniRoute dashboard under API Keys; choose the provider and model in AI Studio → Settings." />
       </div>
       <Card title="How keys are stored">
         <ul className="list-disc space-y-2 pl-4 text-sm text-ink-700">

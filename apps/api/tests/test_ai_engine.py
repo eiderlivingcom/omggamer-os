@@ -339,3 +339,46 @@ async def test_viewer_cannot_run_ai(client: AsyncClient, make_user: MakeUser) ->
     assert (await client.post("/api/v1/ai/generate", json={})).status_code == 403
     assert (await client.put("/api/v1/ai/settings", json={"model": "x"})).status_code == 403
     assert (await client.put("/api/v1/ai/credentials", json={"api_key": KEY})).status_code == 403
+
+
+async def test_omniroute_free_model_falls_back_to_plain_json(fake: FakeOpenAI) -> None:
+    """OmniRoute: own key and address, max_tokens, and a model without JSON schema support."""
+    pid = await seed(key=None)
+    async with get_sessionmaker()() as db:
+        await ai_settings.save_settings(db, {"provider": "omniroute", "model": "free-stack"})
+        await ai_settings.set_api_key(db, KEY)  # stored for the active provider
+        assert await ai_settings.api_key(db, "openai") is None
+        await db.commit()
+    fake.answers = [
+        httpx.Response(400, json={"error": {"message": "response_format json_schema is not supported"}}),
+        httpx.Response(
+            200,
+            json={
+                "model": "gemini/gemini-3.8-flash",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "Here you go:\n```json\n" + json.dumps(GOOD) + "\n```"},
+                    }
+                ],
+                "usage": {"prompt_tokens": 900, "completion_tokens": 400},
+            },
+        ),
+    ]
+    jid = await job_for(pid)
+    assert (await run().run(jid)).state == "done"
+    first, second = fake.requests
+    assert first["response_format"]["type"] == "json_schema" and "max_tokens" in first
+    assert "max_completion_tokens" not in first
+    assert second["response_format"] == {"type": "json_object"}
+    assert "JSON schema" in second["messages"][0]["content"]
+    job = await load(AiJob, jid)
+    assert job.outcome in ("generated", "flagged") and job.model == "gemini/gemini-3.8-flash"
+    assert job.estimated_cost == 0
+
+
+def test_parse_json_object_tolerates_wrapping() -> None:
+    assert openai_client.parse_json_object('```json\n{"a": 1}\n```') == {"a": 1}
+    assert openai_client.parse_json_object('Sure! {"a": {"b": 2}} done') == {"a": {"b": 2}}
+    with pytest.raises(openai_client.AiRefusal):
+        openai_client.parse_json_object("no json here")

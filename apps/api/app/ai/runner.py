@@ -132,7 +132,13 @@ class AiRunner:
         temperature = float(settings["temperature"]) if settings.get("send_temperature", True) else None
 
         try:
-            client = OpenAIClient(key or "", transport=transport_override)
+            client = OpenAIClient(
+                key or "",
+                base_url=ai_settings.base_url_of(settings),
+                label=ai_settings.provider_label(settings),
+                json_mode=str(settings.get("json_mode") or "auto"),
+                transport=transport_override,
+            )
         except AiAuthError as exc:
             return await self._fail(db, job, str(exc))
         try:
@@ -251,7 +257,7 @@ class AiRunner:
 
     async def _mark_credential(self, db: AsyncSession, message: str) -> None:
         await db.rollback()
-        row = await db.get(IntegrationCredential, ai_settings.PROVIDER)
+        row = await db.get(IntegrationCredential, await ai_settings.active_provider(db))
         if row is not None:
             row.status = "failed"
             row.last_error = message[:2000]

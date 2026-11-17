@@ -1,4 +1,4 @@
-"""AI settings, the encrypted OpenAI key and versioned prompt templates."""
+"""AI settings, the encrypted provider keys and versioned prompt templates."""
 
 import json
 from decimal import Decimal
@@ -10,9 +10,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_secret, encrypt_secret
 from app.db.models import AiPrompt, AppSetting, IntegrationCredential
 
-PROVIDER = "openai"
+PROVIDER = "openai"  # the original provider; kept as the default
+
+# OpenAI-compatible providers AI Studio can talk to. OmniRoute is the self-hosted router on the Oracle server
+# that sends requests to the free models connected in its dashboard (a combo name such as "free-stack" is
+# used as the model and falls back between its models).
+PROVIDERS: dict[str, dict[str, str]] = {
+    "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
+    "omniroute": {"label": "OmniRoute", "base_url": "https://omniroute.1wp.site/v1", "model": "free-stack"},
+}
 
 DEFAULTS: dict[str, Any] = {
+    "provider": "openai",
+    "base_url": "",  # empty: the provider's standard address
+    # "auto": ask for strict JSON schema output and fall back to plain JSON mode when a model does not support
+    # it (common with free models). "schema" or "json_object" force one of them.
+    "json_mode": "auto",
     "model": "gpt-4o-mini",
     "temperature": 0.4,
     "send_temperature": True,  # some models reject a temperature; turn this off for them
@@ -98,24 +111,42 @@ def cost_for(settings: dict[str, Any], model: str, input_tokens: int, output_tok
     return (total / Decimal(1_000_000)).quantize(Decimal("0.000001"))
 
 
+def provider_of(settings: dict[str, Any]) -> str:
+    p = str(settings.get("provider") or PROVIDER)
+    return p if p in PROVIDERS else PROVIDER
+
+
+def provider_label(settings: dict[str, Any]) -> str:
+    return PROVIDERS[provider_of(settings)]["label"]
+
+
+def base_url_of(settings: dict[str, Any]) -> str:
+    return str(settings.get("base_url") or "").strip() or PROVIDERS[provider_of(settings)]["base_url"]
+
+
 # ------------------------------------------------------------------ credentials
 
 
-async def credential(db: AsyncSession) -> IntegrationCredential | None:
-    return await db.get(IntegrationCredential, PROVIDER)
+async def active_provider(db: AsyncSession) -> str:
+    return provider_of(await get_settings(db))
 
 
-async def api_key(db: AsyncSession) -> str | None:
-    row = await credential(db)
+async def credential(db: AsyncSession, provider: str | None = None) -> IntegrationCredential | None:
+    return await db.get(IntegrationCredential, provider or await active_provider(db))
+
+
+async def api_key(db: AsyncSession, provider: str | None = None) -> str | None:
+    row = await credential(db, provider)
     if row is None or not row.credentials_enc:
         return None
     return str(json.loads(decrypt_secret(row.credentials_enc)).get("api_key") or "") or None
 
 
-async def set_api_key(db: AsyncSession, key: str) -> IntegrationCredential:
-    row = await credential(db)
+async def set_api_key(db: AsyncSession, key: str, provider: str | None = None) -> IntegrationCredential:
+    provider = provider or await active_provider(db)
+    row = await credential(db, provider)
     if row is None:
-        row = IntegrationCredential(provider=PROVIDER)
+        row = IntegrationCredential(provider=provider)
         db.add(row)
     row.credentials_enc = encrypt_secret(json.dumps({"api_key": key.strip()}))
     row.status = "untested"

@@ -26,6 +26,9 @@ def _now() -> datetime:
 
 
 class AiSettingsIn(BaseModel):
+    provider: Literal["openai", "omniroute"] | None = None
+    base_url: str | None = Field(default=None, max_length=300, pattern=r"^(https://\S+)?$")
+    json_mode: Literal["auto", "schema", "json_object"] | None = None
     model: str | None = Field(default=None, min_length=1, max_length=80)
     temperature: float | None = Field(default=None, ge=0, le=2)
     send_temperature: bool | None = None
@@ -42,9 +45,12 @@ class AiSettingsIn(BaseModel):
 
 class KeyIn(BaseModel):
     api_key: str = Field(min_length=20, max_length=500)
+    provider: Literal["openai", "omniroute"] | None = None
 
 
 class CredentialOut(BaseModel):
+    provider: str
+    label: str
     configured: bool
     status: str
     last_checked_at: datetime | None
@@ -143,9 +149,12 @@ def _eligible() -> Select[tuple[uuid.UUID]]:
     )
 
 
-async def _credential_out(db: DB) -> CredentialOut:
-    row = await ai_settings.credential(db)
+async def _credential_out(db: DB, provider: str | None = None) -> CredentialOut:
+    provider = provider or await ai_settings.active_provider(db)
+    row = await ai_settings.credential(db, provider)
     return CredentialOut(
+        provider=provider,
+        label=ai_settings.PROVIDERS[provider]["label"],
         configured=bool(row and row.credentials_enc),
         status=row.status if row else "not_configured",
         last_checked_at=row.last_checked_at if row else None,
@@ -187,51 +196,75 @@ async def put_settings(
     body: AiSettingsIn, request: Request, db: DB, actor: User = require("ai:manage")
 ) -> dict:  # type: ignore[type-arg]
     changes = body.model_dump(exclude_none=True)
+    before = await ai_settings.get_settings(db)
+    if "provider" in changes and changes["provider"] != ai_settings.provider_of(before):
+        # Switching provider: use its standard address and default model unless they were given too.
+        changes.setdefault("model", ai_settings.PROVIDERS[changes["provider"]]["model"])
+        changes.setdefault("base_url", "")
     s = await ai_settings.save_settings(db, changes, actor.id)
     await record(db, "ai.settings", actor=actor, summary="Changed AI settings", data=changes, request=request)
     await db.commit()
     return {k: v for k, v in s.items() if k != "paused"}
 
 
+Provider = Literal["openai", "omniroute"]
+
+
 @router.get("/credentials", response_model=CredentialOut)
-async def get_credentials(db: DB, _: User = require("ai:manage")) -> CredentialOut:
-    return await _credential_out(db)
+async def get_credentials(
+    db: DB, provider: Provider | None = None, _: User = require("ai:manage")
+) -> CredentialOut:
+    return await _credential_out(db, provider)
 
 
 @router.put("/credentials", response_model=CredentialOut)
 async def put_credentials(
     body: KeyIn, request: Request, db: DB, actor: User = require("credentials:manage")
 ) -> CredentialOut:
-    await ai_settings.set_api_key(db, body.api_key)
+    provider = body.provider or await ai_settings.active_provider(db)
+    await ai_settings.set_api_key(db, body.api_key, provider)
+    label = ai_settings.PROVIDERS[provider]["label"]
     await record(
         db,
         "credentials.updated",
         actor=actor,
         entity_type="integration",
-        entity_id="openai",
-        summary="Replaced the OpenAI API key",
+        entity_id=provider,
+        summary=f"Replaced the {label} API key",
         request=request,
     )
     await db.commit()
-    return await _credential_out(db)
+    return await _credential_out(db, provider)
 
 
 @router.post("/credentials/test", response_model=dict[str, Any])
-async def test_credentials(db: DB, _: User = require("ai:manage")) -> dict[str, Any]:
+async def test_credentials(
+    db: DB, provider: Provider | None = None, _: User = require("ai:manage")
+) -> dict[str, Any]:
     from app.ai import runner
 
-    key = await ai_settings.api_key(db)
-    row = await ai_settings.credential(db)
+    s = await ai_settings.get_settings(db)
+    provider = provider or ai_settings.provider_of(s)
+    label = ai_settings.PROVIDERS[provider]["label"]
+    key = await ai_settings.api_key(db, provider)
+    row = await ai_settings.credential(db, provider)
     if not key or row is None:
-        raise AppError(409, "not_configured", "No OpenAI API key is stored.")
+        raise AppError(409, "not_configured", f"No {label} API key is stored.")
+    base = (
+        ai_settings.base_url_of(s)
+        if provider == ai_settings.provider_of(s)
+        else ai_settings.PROVIDERS[provider]["base_url"]
+    )
     ok, message = False, ""
     try:
-        client = OpenAIClient(key, transport=runner.transport_override, max_attempts=2)
+        client = OpenAIClient(
+            key, base_url=base, label=label, transport=runner.transport_override, max_attempts=2
+        )
         try:
             n = await client.check()
         finally:
             await client.aclose()
-        ok, message = True, f"Connected to OpenAI ({n} models available)."
+        ok, message = True, f"Connected to {label} ({n} models available)."
     except AiError as exc:
         message = str(exc)
     row.status = "connected" if ok else "failed"
@@ -268,7 +301,7 @@ async def generate(
     s = await ai_settings.get_settings(db)
     if not await ai_settings.api_key(db):
         raise AppError(
-            409, "not_configured", "Add the OpenAI API key under Settings → API credentials first."
+            409, "not_configured", "Add the AI provider's API key under Settings → API credentials first."
         )
     limit = body.limit or int(s["batch_size"])
     if body.scope == "eligible":
