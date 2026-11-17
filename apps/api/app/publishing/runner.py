@@ -8,6 +8,7 @@ sync_logs; the storefront product ID is saved in storefront_product_mappings.
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.ai import settings as ai_settings
+from app.catalogue import regions
 from app.catalogue.normalize import payload_checksum, slugify
 from app.core.logging import log
 from app.db.models import (
@@ -95,6 +97,27 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
             )
         ).scalars()
     }
+    # Suppliers name the same region many ways; the store only gets the defined region names. Variants that
+    # end up identical (same platform, edition and region) are sent once: the in-stock one with the lowest
+    # price.
+    region_of = {v.id: regions.canonical(v.region) for v in variants}
+    # Stores that suppliers list as a platform (GOG.com is a store like OMGGamer): the platform is PC and the
+    # store is shown as where the key activates.
+    platform_of = {v.id: regions.platform_name(v.platform) for v in variants}
+    activates_on = sorted({s for s in (regions.store_of(v.platform) for v in variants) if s})
+
+    def rank(v: ProductVariant) -> tuple[int, Decimal]:
+        p = prices.get(v.id)
+        ok = bool(p and p.available and p.selling_price is not None)
+        price = p.selling_price if ok and p and p.selling_price is not None else Decimal("9e9")
+        return (0 if ok else 1, price)
+
+    best: dict[tuple[str, str, str], ProductVariant] = {}
+    for v in sorted(variants, key=rank):
+        best.setdefault(((platform_of[v.id] or "").lower(), (v.edition or "").lower(), region_of[v.id]), v)
+    keep = {v.id for v in best.values()}
+    variants = [v for v in variants if v.id in keep]
+
     if status == "publish" and not any(p.selling_price is not None for p in prices.values()):
         raise PublishError(
             "No variant has a selling price. Add a pricing rule (Pricing) and make sure an offer is in stock."
@@ -141,7 +164,13 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
         out = {}
         for name, attr in dims.items():
             if name in used:
-                out[name] = getattr(v, attr) or ("Standard" if attr == "edition" else "Any")
+                if attr == "region":
+                    value = region_of[v.id]
+                elif attr == "platform":
+                    value = platform_of[v.id]
+                else:
+                    value = getattr(v, attr)
+                out[name] = value or ("Standard" if attr == "edition" else "Any")
         return out
 
     display = []
@@ -150,6 +179,7 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
         ("Publisher", product.publisher),
         ("Genre", ", ".join(info.get("genres") or [])),
         ("Activation", ", ".join(sorted({v.activation_type for v in variants if v.activation_type}))),
+        ("Activates on", ", ".join(activates_on)),
     ):
         if value:
             display.append({"name": name, "options": [x.strip() for x in str(value).split(",") if x.strip()]})
@@ -193,7 +223,14 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
             }
             for v in variants
         ],
-        "meta": {"kinguin_ids": ",".join(ext_ids), "product_type": product.product_type},
+        "meta": {
+            "kinguin_ids": ",".join(ext_ids),
+            "product_type": product.product_type,
+            # What each region on this product means, for the region note on the product page.
+            "region_notes": {
+                name: regions.definition(name) for name in sorted({region_of[v.id] for v in variants})
+            },
+        },
         "seo": {
             "title": content.meta_title if content else "",
             "description": content.meta_description if content else "",
