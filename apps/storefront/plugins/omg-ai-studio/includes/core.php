@@ -511,12 +511,22 @@ final class OMG_PS {
 			);
 		}
 		$body = array( 'model' => $model, 'max_tokens' => $max_tokens, 'messages' => array( array( 'role' => 'system', 'content' => $system ), array( 'role' => 'user', 'content' => $ucontent ) ) );
-		$res  = wp_remote_post( $base . '/chat/completions', array( 'timeout' => 200, 'headers' => $headers, 'body' => wp_json_encode( $body ) ) );
+		// OmniRoute sits behind Cloudflare, which closes a request after 100 seconds without data (HTTP 524).
+		// Streaming keeps data flowing while a slow free model writes; the reply is joined back together below.
+		$stream = 'omniroute' === $provider;
+		if ( $stream ) {
+			$body['stream'] = true;
+		}
+		$res  = wp_remote_post( $base . '/chat/completions', array( 'timeout' => 280, 'headers' => $headers, 'body' => wp_json_encode( $body ) ) );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}
 		$code = wp_remote_retrieve_response_code( $res );
-		$data = json_decode( wp_remote_retrieve_body( $res ), true );
+		$raw  = wp_remote_retrieve_body( $res );
+		if ( $code < 300 && $stream && false !== strpos( $raw, 'data:' ) ) {
+			return self::join_stream( $raw, self::PROVIDERS[ $provider ] );
+		}
+		$data = json_decode( $raw, true );
 		if ( $code >= 300 ) {
 			$msg = isset( $data['error']['message'] ) ? $data['error']['message'] : ( isset( $data['message'] ) ? $data['message'] : 'HTTP ' . $code );
 			return new WP_Error( 'omg_ai_http', self::PROVIDERS[ $provider ] . ': ' . $msg );
@@ -530,6 +540,36 @@ final class OMG_PS {
 			$text = $parts;
 		}
 		return (string) $text;
+	}
+
+	/** Joins a streamed (server-sent events) chat completion into the reply text. */
+	private static function join_stream( $raw, $label ) {
+		$text = '';
+		foreach ( preg_split( '/\r?\n/', (string) $raw ) as $line ) {
+			$line = trim( $line );
+			if ( 0 !== strpos( $line, 'data:' ) ) {
+				continue;
+			}
+			$chunk = trim( substr( $line, 5 ) );
+			if ( '' === $chunk || '[DONE]' === $chunk ) {
+				continue;
+			}
+			$d = json_decode( $chunk, true );
+			if ( ! is_array( $d ) ) {
+				continue;
+			}
+			if ( isset( $d['error'] ) ) {
+				$msg = is_array( $d['error'] ) && isset( $d['error']['message'] ) ? $d['error']['message'] : 'the model stopped with an error';
+				return new WP_Error( 'omg_ai_http', $label . ': ' . $msg );
+			}
+			if ( isset( $d['choices'][0]['delta']['content'] ) && is_string( $d['choices'][0]['delta']['content'] ) ) {
+				$text .= $d['choices'][0]['delta']['content'];
+			}
+		}
+		if ( '' === trim( $text ) ) {
+			return new WP_Error( 'omg_ai_empty', $label . ': the model returned no text. Try again.' );
+		}
+		return $text;
 	}
 
 	public static function parse_json( $text ) {
