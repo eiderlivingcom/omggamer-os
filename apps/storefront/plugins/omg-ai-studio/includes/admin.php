@@ -127,8 +127,8 @@ final class OMG_PS_Admin {
 				<div class="omgps-card"><h2>AI provider</h2><table class="form-table" role="presentation">
 					<tr><th><label for="omg-ai-provider">Provider</label></th><td><select id="omg-ai-provider" name="<?php echo $n; ?>[provider]"><?php foreach ( OMG_PS::PROVIDERS as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>" <?php selected( $s['provider'], $k ); ?>><?php echo esc_html( $l ); ?></option><?php endforeach; ?></select></td></tr>
 					<?php $this->secret_row( 'API key', 'api_key', '' !== OMG_PS::api_key(), defined( 'OMG_AI_API_KEY' ) && OMG_AI_API_KEY, 'Stored on the server and never sent to the browser. You can define <code>OMG_AI_API_KEY</code> in wp-config.php instead.' ); ?>
-					<tr><th><label for="omg-ai-model">Model</label></th><td><input id="omg-ai-model" type="text" class="regular-text" name="<?php echo $n; ?>[model]" value="<?php echo esc_attr( $s['model'] ); ?>" placeholder="<?php echo esc_attr( OMG_PS::default_model( $s['provider'] ) ); ?>"><p class="description">Leave empty for the default: Anthropic <code>claude-opus-5-5</code>, OpenAI <code>gpt-4o-mini</code>, OpenRouter <code>anthropic/claude-opus-5-5</code>. OpenAI-compatible providers need a model name.</p></td></tr>
-					<tr class="omgps-base"><th><label for="omg-ai-base">API base URL</label></th><td><input id="omg-ai-base" type="url" class="regular-text" name="<?php echo $n; ?>[base_url]" value="<?php echo esc_attr( $s['base_url'] ); ?>" placeholder="https://your-omnirouter.example.com/v1"><p class="description">For OmniRouter, LiteLLM or any OpenAI-compatible gateway. The plugin calls <code>{base}/chat/completions</code>.</p></td></tr>
+					<tr><th><label for="omg-ai-model">Model</label></th><td><input id="omg-ai-model" type="text" class="regular-text" name="<?php echo $n; ?>[model]" value="<?php echo esc_attr( $s['model'] ); ?>" placeholder="<?php echo esc_attr( OMG_PS::default_model( $s['provider'] ) ); ?>"><p class="description">Leave empty for the default: OmniRoute <code>free-stack</code> (your combo of free Gemini models), Anthropic <code>claude-opus-5-5</code>, OpenAI <code>gpt-4o-mini</code>, OpenRouter <code>anthropic/claude-opus-5-5</code>. OpenAI-compatible providers need a model name.</p></td></tr>
+					<tr class="omgps-base"><th><label for="omg-ai-base">API base URL</label></th><td><input id="omg-ai-base" type="url" class="regular-text" name="<?php echo $n; ?>[base_url]" value="<?php echo esc_attr( $s['base_url'] ); ?>" placeholder="https://omniroute.1wp.site/v1"><p class="description">For OmniRoute leave empty (it uses https://omniroute.1wp.site/v1). For any other OpenAI-compatible gateway enter its address. The plugin calls <code>{base}/chat/completions</code>.</p></td></tr>
 					<tr class="omgps-fb"><th>Refusal fallback</th><td><label><input type="checkbox" name="<?php echo $n; ?>[fallbacks]" value="1" <?php checked( $s['fallbacks'], 1 ); ?>> Let Anthropic retry a declined request on a fallback model</label></td></tr>
 					<tr><th>Connection</th><td><button type="button" class="button" id="omgps-test">Test connection</button> <span id="omgps-test-out" class="omgps-muted"></span><p class="description">Save first, then test. The test sends one very short request.</p></td></tr>
 				</table></div>
@@ -408,7 +408,8 @@ final class OMG_PS_Admin {
 	}
 
 	private function chip( $key, $title, $sub, $available, $chips, $why = '' ) {
-		$on = $available && ( ! $chips || in_array( $key, $chips, true ) );
+		// OMGGamer OS is always on when connected (products saved before it existed have no choice stored for it).
+		$on = $available && ( 'os' === $key || ! $chips || in_array( $key, $chips, true ) );
 		printf(
 			'<label class="omgps-chip%1$s"%5$s><input type="checkbox" name="omg_ps[sources][]" value="%2$s" %3$s %4$s><span><b>%6$s</b><small>%7$s</small></span></label>',
 			$available ? '' : ' is-off',

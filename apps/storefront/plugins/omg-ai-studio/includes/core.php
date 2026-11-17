@@ -14,11 +14,13 @@ final class OMG_PS {
 	const KINGUIN    = 'omg_kinguin_api_key';
 	const NONCE      = 'omg_ai_studio';
 	const PROVIDERS  = array(
+		'omniroute'  => 'OmniRoute (free models, omniroute.1wp.site)',
 		'anthropic'  => 'Anthropic (Claude)',
 		'openai'     => 'OpenAI',
 		'openrouter' => 'OpenRouter',
-		'custom'     => 'OpenAI-compatible (OmniRouter or any other)',
+		'custom'     => 'Other OpenAI-compatible API (enter the address)',
 	);
+	const OMNIROUTE  = 'https://omniroute.1wp.site/v1';
 	const LANGS      = array( 'en' => 'English', 'ar' => 'Arabic', 'fr' => 'French', 'de' => 'German', 'es' => 'Spanish' );
 	const TONES      = array( 'informative' => 'Informative', 'hype' => 'Hype', 'concise' => 'Concise' );
 	const VOICES     = array( 'default' => 'OMGGamer default', 'technical' => 'Technical / spec-first', 'marketplace' => 'Short marketplace copy' );
@@ -52,7 +54,7 @@ final class OMG_PS {
 	}
 
 	public static function default_model( $provider ) {
-		$m = array( 'anthropic' => 'claude-opus-5-5', 'openai' => 'gpt-4o-mini', 'openrouter' => 'anthropic/claude-opus-5-5', 'custom' => '' );
+		$m = array( 'anthropic' => 'claude-opus-5-5', 'openai' => 'gpt-4o-mini', 'openrouter' => 'anthropic/claude-opus-5-5', 'omniroute' => 'free-stack', 'custom' => '' );
 		return isset( $m[ $provider ] ) ? $m[ $provider ] : '';
 	}
 
@@ -490,6 +492,9 @@ final class OMG_PS {
 			return $text;
 		}
 		$base = 'openai' === $provider ? 'https://api.openai.com/v1' : ( 'openrouter' === $provider ? 'https://openrouter.ai/api/v1' : rtrim( $s['base_url'], '/' ) );
+		if ( 'omniroute' === $provider && '' === $base ) {
+			$base = self::OMNIROUTE;
+		}
 		if ( '' === $base ) {
 			return new WP_Error( 'omg_ai_no_base', 'Add the API base URL for your OpenAI-compatible provider in Products › AI Studio.' );
 		}

@@ -340,7 +340,8 @@
         }, chipOn('os') ? '' : 'OMGGamer OS is off or not connected');
         step('Search Steam by title for missing details', function () {
           var f = (source.os && source.os.facts) || {};
-          return post('omg_ps_source', { type: 'steam', post_id: postId, name: (source.os && source.os.original_name) || f.product_name || $title.val(), app_id: (source.os && source.os.steam_app_id) || '' }).then(function (d) { source.steam = d; saveSource(); });
+          // Not every game is on Steam (console exclusives, unreleased games): no match is not an error.
+          return post('omg_ps_source', { type: 'steam', post_id: postId, name: f.product_name || (source.os && source.os.original_name) || $title.val(), app_id: (source.os && source.os.steam_app_id) || '' }).then(function (d) { source.steam = d; saveSource(); }, function (m) { delete source.steam; if (!/no match/i.test(m)) { throw m; } });
         }, chipOn('steam') ? '' : 'Steam is off');
       } else {
         var ean = $s.find('.omgps-sync-ean').first().val(), url = $s.find('.omgps-mfr').val(), pdf = $s.find('.omgps-pdf-id').val();
