@@ -61,9 +61,9 @@
       if (now > pp) { proSave += (now - pp) * i.quantity; }
     });
     var h = '<h2 class="omgx-sum-h">Order summary</h2><div class="omgx-card">';
-    if (!C.proMember && (proSave > 0.5 || hasPro)) {
+    if (!C.proMember) {
       h += '<div class="omgx-pro' + (hasPro ? ' is-on' : '') + '"><div class="hd"><b>Choose your <span class="pro">PRO</span> benefit</b>' + (hasPro ? '<span class="tag">Added</span>' : '<span class="tag hot">Best value</span>') + '</div>' +
-        '<div class="seg"><button type="button" class="' + (hasPro ? '' : 'is-on') + '" data-omgx-pro="off">No thanks</button><button type="button" class="' + (hasPro ? 'is-on' : '') + '" data-omgx-pro="on">Add <span class="pro">PRO</span></button></div>' +
+        '<div class="seg" role="radiogroup" aria-label="PRO membership"><button type="button" role="radio" aria-checked="' + (hasPro ? 'false' : 'true') + '" class="' + (hasPro ? '' : 'is-on') + '" data-omgx-pro="off">No <span class="pro">PRO</span></button><button type="button" role="radio" aria-checked="' + (hasPro ? 'true' : 'false') + '" class="' + (hasPro ? 'is-on' : '') + '" data-omgx-pro="on"><span class="pro">PRO</span></button></div>' +
         '<p class="sv">' + (hasPro ? 'OMG PRO is in your order: ' + (C.proFirst ? money(Math.round(C.proFirst * 100)) + ' for the first month, then ' : '') + money(Math.round((C.proMonthly || C.proPrice || 4.99) * 100)) + '/month, cancel anytime. Promo codes do not apply to PRO.' : 'PRO members get member prices, up to <b>' + money(Math.round(proSave * 100)) + '</b> less on items like these. ' + (C.proFirst ? 'First month ' + money(Math.round(C.proFirst * 100)) + ', then ' : '') + money(Math.round((C.proMonthly || C.proPrice || 4.99) * 100)) + '/month, cancel anytime.') + ' <a href="' + esc(C.proUrl) + '" target="_blank" rel="noopener">How PRO works</a></p></div>';
     }
     h += '<ul class="omgx-items">';
@@ -116,7 +116,7 @@
     else if (e.target.closest('[data-omgx-rmc]')) { run(act().removeCoupon(e.target.closest('[data-omgx-rmc]').getAttribute('data-omgx-rmc'))); }
     else if (e.target.closest('[data-omgx-pro]')) {
       var want = e.target.closest('[data-omgx-pro]').getAttribute('data-omgx-pro') === 'on';
-      var pro = c && c.items.filter(function (i) { return i.id === C.proId; })[0];
+      var pro = c && c.items.filter(function (i) { return Number(i.id) === Number(C.proId); })[0];
       if (want && !pro) { run(act().addItemToCart(C.proId, 1)); } else if (!want && pro) { run(act().removeItemFromCart(pro.key)); }
     }
   });

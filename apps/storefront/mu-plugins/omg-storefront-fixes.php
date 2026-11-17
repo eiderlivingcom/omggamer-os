@@ -189,7 +189,6 @@ html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-
 /* Checkout summary: covers in the product-page ratio; with PRO in the order there is no "No thanks" choice. */
 .omgx-items .im{width:72px!important;height:96px!important}
 @media (max-width:640px){.omgx-items .im{width:60px!important;height:80px!important}}
-.omgx-pro.is-on .seg{display:none!important}
 /* Place order: large and centred. */
 html body .wc-block-checkout__actions_row{display:flex!important;justify-content:center!important;align-items:center!important;flex-wrap:wrap;gap:16px}
 html body .wc-block-checkout__actions_row .wc-block-components-checkout-return-to-cart-button{order:2}
@@ -249,12 +248,12 @@ html body .wc-block-components-checkout-place-order-button,html body #place_orde
   function syncProBox(){
     var box = document.querySelector('.omgx-pro'); if (!box) return;
     var has = proItems().some(function(i){ return Number(i.id) === Number(C.proId) || /\bPRO Membership\b/i.test(i.name || ''); });
-    if (!has) return;
-    if (!box.classList.contains('is-on')) box.classList.add('is-on');
-    var tag = box.querySelector('.hd .tag'); if (tag && tag.textContent !== 'Added') { tag.textContent = 'Added'; tag.classList.remove('hot'); }
+    // PRO in the cart → "PRO" is selected; otherwise "No PRO".
+    box.classList.toggle('is-on', has);
+    var tag = box.querySelector('.hd .tag'); if (tag) { var want = has ? 'Added' : 'Best value'; if (tag.textContent !== want) tag.textContent = want; tag.classList.toggle('hot', !has); }
     var on = box.querySelector('[data-omgx-pro="on"]'), off = box.querySelector('[data-omgx-pro="off"]');
-    if (on && !on.classList.contains('is-on')) on.classList.add('is-on');
-    if (off && off.classList.contains('is-on')) off.classList.remove('is-on');
+    if (on) { on.classList.toggle('is-on', has); on.setAttribute('aria-checked', has ? 'true' : 'false'); }
+    if (off) { off.classList.toggle('is-on', !has); off.setAttribute('aria-checked', has ? 'false' : 'true'); }
   }
   /* Card rating tag that has no value prints its raw name ({woo_...}): hide it. */
   function cleanRatings(){ document.querySelectorAll('.omg-ac-rating').forEach(function(r){ if (/\{[a-z_]+\}/.test(r.textContent)) r.style.display = 'none'; }); }
