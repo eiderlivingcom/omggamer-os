@@ -394,3 +394,34 @@ async def test_saving_a_key_switches_from_a_provider_without_one(
     s = (await client.get("/api/v1/ai/overview")).json()
     assert s["settings"]["provider"] == "omniroute" and s["settings"]["model"] == "free-stack"
     assert s["key"]["configured"] is True and s["key"]["label"] == "OmniRoute"
+
+
+async def test_provider_cooldown_pauses_the_queue_until_reset(fake: FakeOpenAI) -> None:
+    """OmniRoute 'credentials cooling down' (429 + reset_seconds): the job waits, no attempts are used up."""
+    pid = await seed(key=None)
+    async with get_sessionmaker()() as db:
+        await ai_settings.save_settings(db, {"provider": "omniroute", "model": "free-stack"})
+        await ai_settings.set_api_key(db, KEY)
+        await db.commit()
+    fake.answers = [
+        httpx.Response(
+            429,
+            json={
+                "error": {
+                    "message": "All credentials for model gemini-3.8-flash are cooling down",
+                    "code": "model_cooldown",
+                    "reset_seconds": 7200,
+                }
+            },
+        )
+    ]
+    jid = await job_for(pid)
+    out = await run().run(jid)
+    assert out.state == "retry_later" and out.delay > 3000
+    job = await load(AiJob, jid)
+    assert job.status == "queued" and job.attempts == 0 and "quota" in (job.error_message or "")
+    async with get_sessionmaker()() as db:
+        assert ai_settings.cooldown_left(await ai_settings.get_settings(db)) > 7000
+    sent = len(fake.requests)
+    again = await run().run(jid)  # still cooling down: no request is sent
+    assert again.state == "retry_later" and len(fake.requests) == sent

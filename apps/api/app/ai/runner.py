@@ -21,6 +21,7 @@ from app.ai import content as content_mod
 from app.ai import settings as ai_settings
 from app.ai.openai_client import (
     AiAuthError,
+    AiCooldown,
     AiError,
     AiQuotaError,
     AiRequestError,
@@ -77,6 +78,10 @@ class AiRunner:
                     job.status = "paused"
                     await db.commit()
                     return AiOutcome("paused")
+                wait = ai_settings.cooldown_left(settings)
+                if wait > 0:
+                    # The provider's quota is used up: the job waits in the queue and runs once it resets.
+                    return AiOutcome("retry_later", delay=min(wait, 3600) + 5)
                 if not await self._take_slot(redis, str(job_id), int(settings["concurrency"])):
                     return AiOutcome("retry_later", delay=15)
                 try:
@@ -138,6 +143,9 @@ class AiRunner:
                 label=ai_settings.provider_label(settings),
                 json_mode=str(settings.get("json_mode") or "auto"),
                 transport=transport_override,
+                # A gateway in front of free models can hang until its proxy gives up (~100 s): fail fast.
+                timeout=110.0 if ai_settings.provider_of(settings) == "omniroute" else 120.0,
+                max_attempts=2 if ai_settings.provider_of(settings) == "omniroute" else 4,
             )
         except AiAuthError as exc:
             return await self._fail(db, job, str(exc))
@@ -165,12 +173,18 @@ class AiRunner:
                     )
                 else:
                     raise
+        except AiCooldown as exc:
+            return await self._cooldown(db, job, exc)
         except (AiAuthError, AiQuotaError) as exc:
             await self._mark_credential(db, str(exc))
             return await self._fail(db, job, str(exc))
         except AiRequestError as exc:
             return await self._fail(db, job, str(exc))
         except AiError as exc:
+            if exc.temporary and ai_settings.provider_of(settings) == "omniroute":
+                # Free models that stop answering (quota spent, every fallback busy) would block each job for
+                # minutes: wait 10 minutes for the whole queue instead.
+                return await self._cooldown(db, job, AiCooldown(f"OmniRoute did not answer: {exc}", 600))
             return await self._retry(db, job, settings, str(exc))
         finally:
             await client.aclose()
@@ -254,6 +268,25 @@ class AiRunner:
         job.error_message = message[:4000]
         await db.commit()
         return AiOutcome("retry_later", delay=float(min(600, 30 * 2 ** (job.attempts - 1))))
+
+    async def _cooldown(self, db: AsyncSession, job: AiJob, exc: AiCooldown) -> AiOutcome:
+        """Pause the whole queue until the provider's quota resets; this job goes back in line unchanged."""
+        await db.rollback()
+        await db.refresh(job)
+        until = now().timestamp() + exc.seconds
+        await ai_settings.save_settings(
+            db,
+            {
+                "cooldown_until": datetime.fromtimestamp(until, UTC).isoformat(),
+                "cooldown_reason": str(exc)[:300],
+            },
+        )
+        job.status = "queued"
+        job.attempts = max(0, job.attempts - 1)
+        job.error_message = f"Waiting for the AI provider's quota to reset: {exc}"[:4000]
+        await db.commit()
+        log.warning("ai_provider_cooldown", seconds=exc.seconds, error=str(exc))
+        return AiOutcome("retry_later", delay=min(exc.seconds, 3600) + 5)
 
     async def _mark_credential(self, db: AsyncSession, message: str) -> None:
         await db.rollback()

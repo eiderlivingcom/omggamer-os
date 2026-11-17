@@ -41,6 +41,14 @@ class AiTemporaryError(AiError):
     temporary = True
 
 
+class AiCooldown(AiError):
+    """The provider's (free) quota is used up for a while; nothing will work until it resets."""
+
+    def __init__(self, message: str, seconds: float) -> None:
+        super().__init__(message)
+        self.seconds = seconds
+
+
 class AiRefusal(AiError):
     """The model refused or returned no usable content."""
 
@@ -82,6 +90,20 @@ def parse_json_object(text: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AiRefusal("The model returned JSON that is not an object")
     return data
+
+
+def _cooldown_seconds(r: httpx.Response) -> float | None:
+    """How long the provider says to wait (body reset_seconds, or Retry-After), if it says."""
+    try:
+        err = r.json().get("error") or {}
+        if isinstance(err, dict) and err.get("reset_seconds") is not None:
+            return float(err["reset_seconds"])
+    except (ValueError, TypeError, AttributeError):
+        pass
+    try:
+        return float(r.headers.get("retry-after", ""))
+    except ValueError:
+        return None
 
 
 class OpenAIClient:
@@ -128,6 +150,11 @@ class OpenAIClient:
                     raise AiAuthError(f"{self.label} refused the API key: {msg}")
                 if r.status_code == 429 and code == "insufficient_quota":
                     raise AiQuotaError(f"{self.label} account has no remaining quota: {msg}")
+                if r.status_code == 429:
+                    wait = _cooldown_seconds(r)
+                    if wait is not None and wait > 120:
+                        # e.g. OmniRoute "All credentials for model ... are cooling down" (daily free quota).
+                        raise AiCooldown(f"{self.label}: {msg}", wait)
                 if r.status_code in (400, 403, 404, 422):
                     raise AiRequestError(f"{self.label} rejected the request ({r.status_code}): {msg}")
                 last = f"{self.label} {r.status_code}: {msg}"

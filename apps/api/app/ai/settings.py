@@ -1,6 +1,7 @@
 """AI settings, the encrypted provider keys and versioned prompt templates."""
 
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -44,6 +45,9 @@ DEFAULTS: dict[str, Any] = {
         "Use the product name naturally; do not stuff keywords."
     ),
     "paused": False,
+    # Set when the provider says its quota is used up; the queue waits until then and resumes by itself.
+    "cooldown_until": None,
+    "cooldown_reason": None,
     # USD per 1M tokens. Check your provider's current price list and adjust; unknown models cost 0.
     "pricing": {"gpt-4o-mini": {"input_per_million": 0.15, "output_per_million": 0.60}},
 }
@@ -109,6 +113,18 @@ def cost_for(settings: dict[str, Any], model: str, input_tokens: int, output_tok
         + Decimal(str(price.get("output_per_million", 0))) * output_tokens
     )
     return (total / Decimal(1_000_000)).quantize(Decimal("0.000001"))
+
+
+def cooldown_left(settings: dict[str, Any]) -> float:
+    """Seconds until the provider's quota resets (0 when not cooling down)."""
+    raw = settings.get("cooldown_until")
+    if not raw:
+        return 0.0
+    try:
+        until = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return 0.0
+    return max(0.0, (until - datetime.now(UTC)).total_seconds())
 
 
 def provider_of(settings: dict[str, Any]) -> str:

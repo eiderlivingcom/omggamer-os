@@ -23,6 +23,8 @@ type Settings = {
   brand_voice: string;
   seo_requirements: string;
   pricing: Record<string, { input_per_million: number; output_per_million: number }>;
+  cooldown_until?: string | null;
+  cooldown_reason?: string | null;
 };
 type Overview = {
   paused: boolean;
@@ -128,6 +130,15 @@ export default function AiStudioPage() {
         actions={ov && <Pill tone={ov.paused ? "warn" : ov.key.status === "connected" ? "ok" : "muted"}>{ov.paused ? "Paused" : ov.key.configured ? `${ov.key.label} · ${ov.settings.model}` : `No ${ov.key.label} key`}</Pill>}
       />
       {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
+      {ov?.settings.cooldown_until && new Date(ov.settings.cooldown_until) > new Date() && (
+        <div className="mb-4">
+          <Notice tone="info">
+            Waiting for the AI provider until {new Date(ov.settings.cooldown_until).toLocaleString()}: its free quota is used up or it stopped answering.
+            Queued products stay in line and continue automatically. To go faster, add another free provider to the combo in OmniRoute.
+            {ov.settings.cooldown_reason ? <span className="mt-1 block text-xs opacity-80">{ov.settings.cooldown_reason}</span> : null}
+          </Notice>
+        </div>
+      )}
       {notice && <div className="mb-4"><Notice tone="ok">{notice}</Notice></div>}
       {ov && !ready && (
         <div className="mb-4">
