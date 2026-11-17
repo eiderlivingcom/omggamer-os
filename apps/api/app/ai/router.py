@@ -221,8 +221,13 @@ async def get_credentials(
 async def put_credentials(
     body: KeyIn, request: Request, db: DB, actor: User = require("credentials:manage")
 ) -> CredentialOut:
-    provider = body.provider or await ai_settings.active_provider(db)
+    active = await ai_settings.active_provider(db)
+    provider = body.provider or active
     await ai_settings.set_api_key(db, body.api_key, provider)
+    if provider != active and not await ai_settings.api_key(db, active):
+        # The provider in use has no key: start using the one that was just added.
+        switch = {"provider": provider, "model": ai_settings.PROVIDERS[provider]["model"], "base_url": ""}
+        await ai_settings.save_settings(db, switch, actor.id)
     label = ai_settings.PROVIDERS[provider]["label"]
     await record(
         db,

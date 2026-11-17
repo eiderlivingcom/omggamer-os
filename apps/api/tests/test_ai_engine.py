@@ -382,3 +382,15 @@ def test_parse_json_object_tolerates_wrapping() -> None:
     assert openai_client.parse_json_object('Sure! {"a": {"b": 2}} done') == {"a": {"b": 2}}
     with pytest.raises(openai_client.AiRefusal):
         openai_client.parse_json_object("no json here")
+
+
+async def test_saving_a_key_switches_from_a_provider_without_one(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    await make_user()
+    await login(client)
+    r = await client.put("/api/v1/ai/credentials", json={"api_key": KEY, "provider": "omniroute"})
+    assert r.status_code == 200 and r.json()["provider"] == "omniroute"
+    s = (await client.get("/api/v1/ai/overview")).json()
+    assert s["settings"]["provider"] == "omniroute" and s["settings"]["model"] == "free-stack"
+    assert s["key"]["configured"] is True and s["key"]["label"] == "OmniRoute"
