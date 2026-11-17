@@ -193,7 +193,10 @@ html body #omg-dg #omg-dg-buy .omg-bb-opts:has(.omg-bb-opt-pro[hidden]) .omg-bb-
 /* Place order: large and centred. */
 html body .wc-block-checkout__actions_row{display:flex!important;justify-content:center!important;align-items:center!important;flex-wrap:wrap;gap:16px}
 html body .wc-block-checkout__actions_row .wc-block-components-checkout-return-to-cart-button{order:2}
-html body .wc-block-components-checkout-place-order-button,html body #place_order{width:100%!important;max-width:560px!important;min-height:60px!important;margin:8px auto 0!important;font-size:18px!important;font-weight:700!important;border-radius:14px!important;display:flex!important;justify-content:center!important;align-items:center!important}
+/* No order notes: digital orders need none (the box and its divider lines are removed). */
+html body .wp-block-woocommerce-checkout-order-note-block,html body .wc-block-checkout__order-notes{display:none!important}
+html body .wc-block-checkout__actions_row .wc-block-components-checkout-place-order-button{flex:1 1 100%!important}
+html body .wc-block-components-checkout-place-order-button,html body #place_order{width:100%!important;max-width:none!important;min-height:60px!important;margin:8px 0 0!important;font-size:18px!important;font-weight:700!important;border-radius:14px!important;display:flex!important;justify-content:center!important;align-items:center!important}
 .omgx-pro.is-on .sv{margin-top:4px}
 
 /* Cart page (block cart) covers. */

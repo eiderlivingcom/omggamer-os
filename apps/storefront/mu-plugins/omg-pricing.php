@@ -46,6 +46,8 @@ final class OMG_Pricing
         add_filter('get_post_metadata', [__CLASS__, 'pro_meta'], 10, 4);
         add_action('woocommerce_before_calculate_totals', [__CLASS__, 'member_prices'], 15);
         add_filter('woocommerce_coupon_get_discount_amount', [__CLASS__, 'floor'], 50, 5);
+        add_action('woocommerce_coupon_options', [__CLASS__, 'coupon_field'], 10, 2);
+        add_action('woocommerce_coupon_options_save', [__CLASS__, 'coupon_save'], 10, 2);
         add_action('wp_footer', [__CLASS__, 'buybox_js'], 85);
         if (is_admin()) {
             add_action('admin_menu', [__CLASS__, 'menu'], 70);
@@ -267,6 +269,10 @@ final class OMG_Pricing
         if (!is_array($cart_item) || empty($cart_item['data']) || !$cart_item['data'] instanceof WC_Product) {
             return $discount;
         }
+        // Giveaway codes: a 100% coupon, or any coupon ticked "Ignore the profit floor", gives the full discount.
+        if ($coupon instanceof WC_Coupon && self::ignores_floor($coupon)) {
+            return $discount;
+        }
         $reg = $cart_item['data']->get_regular_price('edit');
         if (!is_numeric($reg) || (float) $reg <= 0) {
             return $discount;
@@ -281,6 +287,32 @@ final class OMG_Pricing
         $qty = $single ? 1 : max(1, (int) ($cart_item['quantity'] ?? 1));
         $max = max(0, (float) $discounting_amount - $floor * $qty);
         return min((float) $discount, $max);
+    }
+
+    public static function ignores_floor(WC_Coupon $coupon): bool
+    {
+        if ('yes' === $coupon->get_meta('_omg_ignore_floor')) {
+            return true;
+        }
+        return 'percent' === $coupon->get_discount_type() && (float) $coupon->get_amount() >= 100;
+    }
+
+    public static function coupon_field($coupon_id, $coupon): void
+    {
+        woocommerce_wp_checkbox([
+            'id' => '_omg_ignore_floor',
+            'label' => 'Ignore the profit floor',
+            'description' => 'Let this code go below supplier cost + minimum profit (giveaways, refunds). 100% codes always do.',
+            'value' => $coupon instanceof WC_Coupon && 'yes' === $coupon->get_meta('_omg_ignore_floor') ? 'yes' : 'no',
+        ]);
+    }
+
+    public static function coupon_save($post_id, $coupon): void
+    {
+        if ($coupon instanceof WC_Coupon) {
+            $coupon->update_meta_data('_omg_ignore_floor', isset($_POST['_omg_ignore_floor']) ? 'yes' : 'no'); // phpcs:ignore
+            $coupon->save_meta_data();
+        }
     }
 
     /* ---------------- product page: PRO line follows the chosen edition ---------------- */

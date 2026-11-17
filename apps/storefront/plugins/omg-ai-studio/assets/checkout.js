@@ -70,7 +70,7 @@
     items.forEach(function (i) {
       var p = i.prices || {}, img = i.images && i.images[0] ? (i.images[0].thumbnail || i.images[0].src) : '';
       var ql = pick(i, 'quantityLimits', 'quantity_limits') || {}, max = pick(ql, 'maximum') || 99, editable = pick(ql, 'editable') !== false;
-      var vars = (i.variation || []).map(function (v) { return esc(v.value); }).join(' · ');
+      var vars = (i.variation || []).map(function (v) { return esc(plain(v.value)); }).join(' · ');
       var type = (C.types && C.types[i.id]) || (i.id === C.proId ? 'Membership' : 'Item');
       var reg = parseInt(pick(p, 'regular_price'), 10) * i.quantity, line = parseInt(pick(i.totals || {}, 'line_total'), 10);
       h += '<li data-key="' + esc(i.key) + '"><a class="im" href="' + esc(i.permalink) + '" target="_blank" rel="noopener">' + (img ? '<img src="' + esc(img) + '" alt="">' : '') + '</a><div class="in">' +
@@ -94,7 +94,7 @@
     (c.fees || []).forEach(function (f) { h += '<div><dt>' + esc(f.name) + '</dt><dd>' + money(pick(f.totals || {}, 'total'), t) + '</dd></div>'; });
     if (tax) { h += '<div><dt>Taxes</dt><dd>' + money(tax, t) + '</dd></div>'; }
     h += '<div class="prot"><dt><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.6 8 11 4.6-1.4 8-6 8-11V5z"/></svg>OMG Buyer Protection</dt><dd><span class="in">Included</span></dd></div></dl>';
-    h += '<div class="omgx-total"><span>Total</span><div><b>' + money(pick(t, 'total_price'), t) + '</b><small>Price not final <span class="i" tabindex="0" aria-label="The final price is confirmed when you pay, after discount codes and any payment method fee.">i<span class="tip">The final price is confirmed when you pay, after discount codes and any payment method fee.</span></span></small></div></div>';
+    h += '<div class="omgx-total"><span>Total</span><div><b>' + money(pick(t, 'total_price'), t) + '</b></div></div>';
     h += '</div><p class="omgx-legal">By placing the order, I agree to the <a href="' + esc(C.terms) + '" target="_blank" rel="noopener">Terms of Service</a> and <a href="' + esc(C.privacy) + '" target="_blank" rel="noopener">Privacy Policy</a>. ' + (needsShip ? 'Physical items ship to your delivery address.' : 'Digital items are delivered instantly to your email and account.') + '</p>';
     mount.innerHTML = h;
     mount.classList.toggle('is-busy', busy);
