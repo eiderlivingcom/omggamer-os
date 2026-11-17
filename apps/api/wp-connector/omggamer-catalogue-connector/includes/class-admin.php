@@ -25,6 +25,7 @@ class OMG_Connector_Admin
         register_setting('omg_connector', 'omg_connector_os_url', ['type' => 'string', 'sanitize_callback' => 'esc_url_raw', 'default' => 'https://os.omggamer.com']);
         register_setting('omg_connector', 'omg_connector_storefront', ['type' => 'string', 'sanitize_callback' => 'sanitize_key']);
         register_setting('omg_connector', 'omg_connector_strict', ['type' => 'integer', 'sanitize_callback' => 'absint']);
+        register_setting('omg_connector', 'omg_connector_lock_published', ['type' => 'integer', 'sanitize_callback' => 'absint', 'default' => 1]);
     }
 
     public static function page()
@@ -60,6 +61,8 @@ class OMG_Connector_Admin
                             <p><label>OMGGamer OS URL <input type="url" class="regular-text" name="omg_connector_os_url" value="<?php echo esc_attr((string) get_option('omg_connector_os_url', 'https://os.omggamer.com')); ?>"></label></p>
                             <p><label>Storefront code <input type="text" name="omg_connector_storefront" value="<?php echo esc_attr((string) get_option('omg_connector_storefront', '')); ?>" placeholder="omggamer-staging"></label></p>
                             <p><label><input type="checkbox" name="omg_connector_strict" value="1" <?php checked((int) get_option('omg_connector_strict', 0), 1); ?>> Block checkout when OMGGamer OS cannot be reached</label></p>
+                            <input type="hidden" name="omg_connector_lock_published" value="0">
+                            <p><label><input type="checkbox" name="omg_connector_lock_published" value="1" <?php checked((int) get_option('omg_connector_lock_published', 1), 1); ?>> Keep the store's content on published products: OMGGamer OS only updates their prices and stock (title, descriptions, images, video, attributes and SEO are never changed)</label></p>
                             <p class="description">With a storefront code set, checkout confirms with OMGGamer OS that each item still has a purchasable supplier offer. Leave the code empty to switch the check off.</p>
                         </td>
                     </tr>

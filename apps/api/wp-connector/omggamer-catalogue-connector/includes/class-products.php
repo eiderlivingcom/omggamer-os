@@ -58,6 +58,11 @@ class OMG_Connector_Products
 
         $id = self::find_by_external($external_id);
         $created = false;
+        // A product that is live on the store keeps everything the store has (title, descriptions, images, video,
+        // attributes, categories, tags, SEO): OMGGamer OS only updates its prices and stock.
+        if ($id && get_post_status($id) === 'publish' && self::content_locked() && empty($p['replace_content'])) {
+            return $this->update_live_prices($id, $variants);
+        }
         if ($id && get_post_status($id) === 'trash') {
             wp_untrash_post($id);
         }
@@ -159,6 +164,93 @@ class OMG_Connector_Products
         $product->set_status($status);
         $product->save();
         return ['ok' => true, 'product_id' => $id, 'status' => $status];
+    }
+
+    /** Published products: content is managed on the store, only prices change (default on). */
+    public static function content_locked()
+    {
+        return (int) get_option('omg_connector_lock_published', 1) === 1;
+    }
+
+    /** Prices and stock of a published product; variants are matched by OMGGamer variant ID, else by options. */
+    private function update_live_prices($product_id, array $variants)
+    {
+        $variable = WC_Product_Factory::get_product_type($product_id) === 'variable';
+        $map = [];
+        foreach ($variants as $v) {
+            $vid = sanitize_text_field($v['variant_id'] ?? '');
+            $target_id = $variable ? self::find_variation($product_id, $vid) : $product_id;
+            if ($variable && !$target_id) {
+                $target_id = $this->variation_by_options($product_id, (array) ($v['attributes'] ?? []));
+                if ($target_id) {
+                    update_post_meta($target_id, '_omg_variant_id', $vid); // remember the new mapping
+                }
+            }
+            if (!$variable && count($variants) > 1) {
+                $this->warnings[] = 'The store has this product as a single item; only the first price was updated.';
+            }
+            $target = $target_id ? wc_get_product($target_id) : null;
+            if (!$target) {
+                $this->warnings[] = 'No matching option on the store for ' . implode(' / ', array_map('strval', (array) ($v['attributes'] ?? []))) . '; not added (content is locked).';
+                continue;
+            }
+            $this->apply_price($target, $v);
+            $target->save();
+            $map[$vid] = $target_id;
+            if (!$variable) {
+                break;
+            }
+        }
+        if ($variable) {
+            WC_Product_Variable::sync($product_id);
+        }
+        update_post_meta($product_id, '_omg_synced_at', gmdate('c'));
+        wc_delete_product_transients($product_id);
+        return [
+            'ok' => true,
+            'product_id' => $product_id,
+            'created' => false,
+            'locked' => true,
+            'type' => $variable ? 'variable' : 'simple',
+            'status' => get_post_status($product_id),
+            'permalink' => get_permalink($product_id),
+            'variations' => $map,
+            'warnings' => $this->warnings,
+        ];
+    }
+
+    /** A variation whose options (Platform, Edition, Region...) match, compared by slug. */
+    private function variation_by_options($product_id, array $attrs)
+    {
+        if (!$attrs) {
+            return 0;
+        }
+        $want = [];
+        foreach ($attrs as $name => $value) {
+            $want[sanitize_title((string) $name)] = sanitize_title((string) $value);
+        }
+        $parent = wc_get_product($product_id);
+        foreach ($parent ? $parent->get_children() : [] as $child_id) {
+            $child = wc_get_product($child_id);
+            if (!$child) {
+                continue;
+            }
+            $have = [];
+            foreach ($child->get_attributes() as $key => $value) {
+                $have[sanitize_title(preg_replace('/^(attribute_)?pa_/', '', (string) $key))] = sanitize_title((string) $value);
+            }
+            $ok = true;
+            foreach ($want as $k => $val) {
+                if (!isset($have[$k]) || $have[$k] !== $val) {
+                    $ok = false;
+                    break;
+                }
+            }
+            if ($ok) {
+                return (int) $child_id;
+            }
+        }
+        return 0;
     }
 
     /** Price and stock only (used by price/stock synchronisation). */
