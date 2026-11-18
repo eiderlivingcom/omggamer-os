@@ -232,6 +232,11 @@ class OMG_Connector_Products
             if ($variable && $target->get_status() !== 'publish') {
                 $target->set_status('publish'); // hidden earlier (other platform / no longer sold) and back now
             }
+            if ($variable) {
+                // The option's choices (Platform, Region, Type...) are structure, not content: keep them in step,
+                // e.g. existing Key options get "Type: Key" once the game also sells Gift links.
+                $target->set_attributes($this->variation_attributes($v));
+            }
             $this->apply_sku($target, $v['sku'] ?? '');
             $this->apply_price($target, $v);
             $target->save();
