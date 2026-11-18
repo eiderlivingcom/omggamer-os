@@ -287,6 +287,10 @@ class OMG_Connector_Products
                 $old->set_options($options);
                 $old->set_variation(true);
                 $attrs[$key] = $old;
+                if ($old->is_taxonomy()) {
+                    // An option list changed in place is not seen as a change by WooCommerce: set the terms too.
+                    wp_set_object_terms($parent->get_id(), array_map('intval', $options), $old->get_name());
+                }
             } else {
                 $pos++;
                 $attrs[$key] = $obj;
