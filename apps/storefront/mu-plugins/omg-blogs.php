@@ -3,7 +3,7 @@
  * Plugin Name: OMGGamer blog links
  * Description: The blog lives at omggamer.com/blogs/ (site 2 of the network). /blog and anything under it redirect
  *              there (301), the footer "Blog" link points straight at it, and product pages show "From the blog":
- *              four articles from /blogs/ about the game (matched on its name), else the latest ones.
+ *              four articles from /blogs/ about the game (matched on its name), else the latest ones (image + title).
  * Version: 1.0.0
  */
 
@@ -101,7 +101,7 @@ final class OMG_Blogs
     <?php foreach ($posts as $p) : ?>
     <a class="omg-blogs-card" href="<?php echo esc_url($p['url']); ?>">
       <span class="im"><?php if ($p['image']) : ?><img src="<?php echo esc_url($p['image']); ?>" alt="" loading="lazy"><?php endif; ?></span>
-      <span class="tx"><small><?php echo esc_html($p['date']); ?></small><b><?php echo esc_html($p['title']); ?></b><?php if ($p['excerpt']) : ?><span><?php echo esc_html($p['excerpt']); ?></span><?php endif; ?></span>
+      <span class="tx"><b><?php echo esc_html($p['title']); ?></b></span>
     </a>
     <?php endforeach; ?>
   </div>
@@ -114,9 +114,9 @@ final class OMG_Blogs
 .omg-blogs-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .omg-blogs-card{display:flex;flex-direction:column;border-radius:16px;overflow:hidden;background:#141121;border:1px solid #2a2540;text-decoration:none;transition:border-color .2s,transform .2s}
 .omg-blogs-card:hover{border-color:#8b5cf6;transform:translateY(-2px)}
-.omg-blogs-card .im{aspect-ratio:16/9;background:#1d1930}
+.omg-blogs-card .im{display:block;aspect-ratio:16/9;overflow:hidden;background:#1d1930}
 .omg-blogs-card .im img{width:100%;height:100%;object-fit:cover;display:block}
-.omg-blogs-card .tx{display:flex;flex-direction:column;gap:6px;padding:14px 16px 16px}
+.omg-blogs-card .tx{display:block;padding:14px 16px 16px}
 .omg-blogs-card small{color:#8d84a8;font-size:12px}
 .omg-blogs-card b{color:#f4f2fb;font-size:15px;line-height:1.35}
 .omg-blogs-card .tx span{color:#a79ec0;font-size:13px;line-height:1.5}
