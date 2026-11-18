@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.ai import settings as ai_settings
-from app.catalogue import regions, sku
+from app.catalogue import listing_facts, regions, sku
 from app.catalogue.normalize import payload_checksum, slugify
 from app.core.logging import log
 from app.db.models import (
@@ -134,8 +134,22 @@ async def build_payload(
             )
         ).scalars()
     )
+    # Options the store sells: not held-back delivery types (shared "access" accounts), and not options left
+    # without any supplier record (after records were re-sorted to the region they really work in).
+    supplied = set(
+        (
+            await db.execute(
+                select(SupplierProduct.variant_id).where(
+                    SupplierProduct.product_id == product.id, SupplierProduct.variant_id.is_not(None)
+                )
+            )
+        ).scalars()
+    )
+    variants = [
+        v for v in variants if v.id in supplied and (v.activation_type or "key") not in listing_facts.NOT_SOLD
+    ]
     if not variants:
-        raise PublishError("The product has no variants.")
+        raise PublishError("The product has no options the store can sell.")
     await PricingEngine(db).recalculate(variants, sf, reason="publish")
     prices = {
         vp.variant_id: vp
@@ -162,9 +176,17 @@ async def build_payload(
         price = p.selling_price if ok and p and p.selling_price is not None else Decimal("9e9")
         return (0 if ok else 1, price)
 
-    best: dict[tuple[str, str, str], ProductVariant] = {}
+    best: dict[tuple[str, str, str, str], ProductVariant] = {}
     for v in sorted(variants, key=rank):
-        best.setdefault(((platform_of[v.id] or "").lower(), (v.edition or "").lower(), region_of[v.id]), v)
+        best.setdefault(
+            (
+                (platform_of[v.id] or "").lower(),
+                (v.edition or "").lower(),
+                region_of[v.id],
+                v.activation_type or "key",
+            ),
+            v,
+        )
     keep = {v.id for v in best.values()}
     if platform is not None:
         # One listing per platform: only this platform's options.
@@ -234,8 +256,10 @@ async def build_payload(
     alt = (content.image_alt_text if content else {}) or {}
     info = (content.structured_info if content else {}) or {}
 
-    dims = {"Platform": "platform", "Edition": "edition", "Region": "region"}
+    dims = {"Platform": "platform", "Edition": "edition", "Region": "region", "Type": "activation_type"}
     used = {name for name, attr in dims.items() if any(getattr(v, attr) for v in variants)}
+    if len({v.activation_type or "key" for v in variants}) < 2:
+        used.discard("Type")  # only shown when a listing sells more than one (e.g. Key and Gift)
 
     def v_attrs(v: ProductVariant) -> dict[str, str]:
         out = {}
@@ -245,6 +269,8 @@ async def build_payload(
                     value = region_of[v.id]
                 elif attr == "platform":
                     value = platform_of[v.id]
+                elif attr == "activation_type":
+                    value = listing_facts.DELIVERY_LABELS.get(v.activation_type or "key", "Key")
                 else:
                     value = getattr(v, attr)
                 out[name] = value or ("Standard" if attr == "edition" else "Any")
@@ -270,7 +296,8 @@ async def build_payload(
         "name": name,
         "slug": product.slug if not listing else f"{product.slug}-{listing}",
         # A per-platform listing only has its platform's options: the store drops any others it still has.
-        "prune_variations": platform is not None,
+        # Options the OS no longer sends (re-sorted, another platform's listing, held back) leave the store.
+        "prune_variations": True,
         "status": status,
         "short_description": content.short_description if content else "",
         "description": (content.long_description or "").replace("\n\n", "</p><p>").join(["<p>", "</p>"])

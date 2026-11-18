@@ -231,6 +231,88 @@ def apply_category_rules() -> int:
     return asyncio.run(_apply_category_rules())
 
 
+async def requeue_live(db: Any, product_ids: set[Any]) -> list[Any]:
+    """Re-publish live games whose options changed (one queue item per game and storefront)."""
+    from app.db.models import Product, PublishingQueueItem, Storefront, StorefrontProductMapping
+    from app.db.models.jobs import ACTIVE_JOB_STATUSES
+
+    ids = []
+    for sf in list((await db.execute(select(Storefront).where(Storefront.status == "active"))).scalars()):
+        live = list(
+            (
+                await db.execute(
+                    select(StorefrontProductMapping.product_id)
+                    .join(Product, Product.id == StorefrontProductMapping.product_id)
+                    .where(
+                        StorefrontProductMapping.storefront_id == sf.id,
+                        StorefrontProductMapping.product_id.in_(product_ids),
+                        StorefrontProductMapping.listing == "",
+                        Product.product_status == "published",
+                    )
+                )
+            ).scalars()
+        )
+        for pid in live:
+            busy = await db.scalar(
+                select(PublishingQueueItem.id).where(
+                    PublishingQueueItem.product_id == pid,
+                    PublishingQueueItem.storefront_id == sf.id,
+                    PublishingQueueItem.status.in_(ACTIVE_JOB_STATUSES),
+                )
+            )
+            if busy:
+                continue
+            item = PublishingQueueItem(
+                product_id=pid,
+                storefront_id=sf.id,
+                action="upsert",
+                status="queued",
+                approval_status="approved",
+                approved_at=datetime.now(UTC),
+            )
+            db.add(item)
+            await db.flush()
+            ids.append(item.id)
+    return ids
+
+
+async def _resort() -> dict[str, int]:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.catalogue.resort import resort
+    from app.publishing import queue as publish_queue
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            stats = await resort(db)
+            ids = await requeue_live(db, stats.products) if stats.products else []
+            await db.commit()
+        publish_queue.enqueue(ids)
+        return {**stats.as_dict(), "republished": len(ids)}
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(
+    base=ReliableTask, name="catalogue.resort", time_limit=3 * 3600, soft_time_limit=3 * 3600 - 300
+)  # type: ignore[misc]
+def catalogue_resort() -> dict[str, int]:
+    """Re-sort every supplier record into the region / type it really is (see app.catalogue.resort)."""
+    import redis as redis_sync
+
+    lock = redis_sync.Redis.from_url(settings.redis_url).lock("omgos:catalogue:resort", timeout=3 * 3600)
+    if not lock.acquire(blocking=False):
+        return {"skipped": 1}
+    try:
+        return asyncio.run(_resort())
+    finally:
+        try:
+            lock.release()
+        except Exception:  # the lock already expired
+            log.warning("resort_lock_release_failed")
+
+
 async def _matching_scan(restart: bool = False) -> dict[str, Any]:
     from sqlalchemy.ext.asyncio import async_sessionmaker
 

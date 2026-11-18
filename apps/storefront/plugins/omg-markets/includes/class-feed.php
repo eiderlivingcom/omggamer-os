@@ -266,6 +266,9 @@ final class OMG_Markets_Feed
             $region = '';
         }
         $type = (string) get_post_meta($parent ? $parent->get_id() : $p->get_id(), '_omg_product_type', true);
+        if (strcasecmp($attr($p, 'type'), 'Gift') === 0) {
+            $type = 'gift_link'; // a store gift link (e.g. Steam gift), not a key
+        }
         if (function_exists('omg_listing_title')) {
             // Same structure as the product page title, without "Buy" (promotional text is not allowed in Shopping).
             $t = omg_listing_title($name, $platform !== '' ? [$platform] : [], $region !== '' ? [$region] : [], $type ?: 'game', $edition, false);

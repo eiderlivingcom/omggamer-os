@@ -12,6 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.catalogue import listing_facts
 from app.catalogue.normalize import edition_of, is_game_currency
 from app.catalogue.schemas import NormalizedMedia, NormalizedOffer, NormalizedProduct
 from app.suppliers.base import NormalizationError
@@ -173,7 +174,12 @@ def normalize(record: dict[str, Any]) -> NormalizedProduct:
     if not name:
         raise NormalizationError(f"product {kid} has no name")
     tags = _list(record.get("tags"))
-    activation = "account" if _ACCOUNT.search(name) else ("gift_card" if _GIFT.search(name) else "key")
+    # What the buyer receives and where it works come from the title too: Kinguin's region is coarse ("EUROPE"
+    # for a UK key) and an "Altergift" is a Steam gift link, not a CD key.
+    activation = listing_facts.delivery_type(name)
+    raw_region = _text(record.get("regionalLimitations"), 80)
+    region = listing_facts.country_region(name, raw_region) or region_label(raw_region)
+    devices = listing_facts.devices(name)
     offers, complete = _offers(record)
     attrs = {
         k: v
@@ -186,6 +192,8 @@ def normalize(record: dict[str, Any]) -> NormalizedProduct:
             "steam_app_id": _text(record.get("steam")),
             "metacritic_score": record.get("metacriticScore"),
             "kinguin_platform": _text(record.get("platform")),
+            "kinguin_region": raw_region,
+            "devices": devices or None,
         }.items()
         if v is not None
     }
@@ -199,7 +207,7 @@ def normalize(record: dict[str, Any]) -> NormalizedProduct:
             product_type=product_type_for(name, tags),
             platform=platform_label(_text(record.get("platform"), 80)),
             edition=edition_of(name),
-            region=region_label(_text(record.get("regionalLimitations"), 80)),
+            region=region,
             activation_type=activation,
             variant_attributes=attrs,
             developer=_text(", ".join(_list(record.get("developers"))), 300),

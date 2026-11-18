@@ -254,16 +254,17 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     var sels = Array.prototype.slice.call(form.querySelectorAll('select[name^="attribute_"]'));
     var rg = sels.filter(function(x){ return /region/.test(x.name); })[0] || null;
     var real = function(x){ return Array.prototype.filter.call(x.options, function(o){ return o.value; }); };
-    // Below the region the cards show the edition. A listing with one platform (one listing per platform) has it
-    // chosen for the visitor; the platform switcher above moves between platforms.
+    // Below the region: the edition (Standard when suppliers give none), then the type when a listing sells
+    // more than one (Key / Gift). A choice with a single value is made for the visitor; on one listing per
+    // platform the platform switcher above moves between platforms.
     var pl = sels.filter(function(x){ return /platform/.test(x.name); })[0] || null;
-    var setNow = function(sel, v){ if (sel && sel.value !== v) { sel.value = v; if (window.jQuery) jQuery(sel).trigger('change'); else sel.dispatchEvent(new Event('change', {bubbles: true})); } };
-    if (pl && real(pl).length === 1) setNow(pl, real(pl)[0].value);
-    var edSel = sels.filter(function(x){ return /edition/.test(x.name); })[0] || null;
-    var opt = edSel
-      || sels.filter(function(x){ return x !== rg && x !== pl; })[0]
-      || (pl && real(pl).length > 1 ? pl : null);
     var set = function(sel, v){ if (sel && sel.value !== v) { sel.value = v; if (window.jQuery) jQuery(sel).trigger('change'); else sel.dispatchEvent(new Event('change', {bubbles: true})); } };
+    sels.forEach(function(x){ if (x !== rg && real(x).length === 1) set(x, real(x)[0].value); });
+    var edSel = sels.filter(function(x){ return /edition/.test(x.name); })[0] || null;
+    var rows = [];
+    rows.push(edSel && real(edSel).length > 1 ? edSel : null); // null: one fixed edition card
+    sels.forEach(function(x){ if (x !== rg && x !== edSel && x !== pl && real(x).length > 1) rows.push(x); });
+    if (pl && real(pl).length > 1) rows.push(pl); // one listing, many platforms
     var labelEl = document.getElementById('omg-dg-ed-label');
     if (rg && holder && !holder.querySelector('select')) {
       if (labelEl) labelEl.textContent = 'Region';
@@ -271,52 +272,59 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
       Array.prototype.forEach.call(rg.options, function(o){ if (o.value) rs.appendChild(new Option(o.textContent, o.value, false, o.value === rg.value)); });
       holder.appendChild(rs);
       if (!rg.value && rs.value) set(rg, rs.value);
-      rs.addEventListener('change', function(){ set(rg, rs.value); price(); });
+      rs.addEventListener('change', function(){ set(rg, rs.value); refresh(); });
     }
-    if (!opt) {
-      // No edition data from the suppliers: one Standard edition card, priced for the chosen region.
-      var sc = document.createElement('div'); sc.className = 'omg-ed-card is-active'; sc.setAttribute('aria-current', 'true');
-      sc.innerHTML = '<span class="omg-ed-name">Standard</span><span class="omg-radio"></span><span class="omg-ed-sub">Edition</span><span class="omg-ed-price"></span>';
-      wrap.appendChild(sc);
-      var stdPrice = function(){
-        var r = rg ? rg.value : '', min = null;
-        vars.forEach(function(x){ var a = x.attributes || {}; if ((!rg || !r || !a[rg.name] || a[rg.name] === r) && x.is_in_stock && x.is_purchasable !== false) min = min === null ? x.display_price : Math.min(min, x.display_price); });
-        sc.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
-      };
-      stdPrice();
-      if (rg) rg.addEventListener('change', stdPrice);
-      var hs = holder && holder.querySelector('select'); if (hs) hs.addEventListener('change', function(){ setTimeout(stdPrice, 0); });
-      return;
-    }
-    var lab = form.querySelector('label[for="' + opt.id + '"]'); var attrName = lab ? lab.textContent.trim() : '';
     var title = (document.querySelector('h1') || {}).textContent || '';
     var unitM = title.match(/\d[\d,.]*\s+([A-Za-z][A-Za-z-]+)/); var unit = unitM ? unitM[1] : '';
-    var cards = [];
-    Array.prototype.forEach.call(opt.options, function(o){
-      if (!o.value) return;
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'omg-ed-card'; b.setAttribute('data-value', o.value);
-      b.innerHTML = '<span class="omg-ed-name"></span><span class="omg-radio"></span><span class="omg-ed-sub"></span><span class="omg-ed-price"></span>';
-      b.querySelector('.omg-ed-name').textContent = o.textContent.trim() + (unit && !/[A-Za-z]/.test(o.textContent) ? ' ' + unit : '');
-      b.querySelector('.omg-ed-sub').textContent = attrName || 'Option';
-      b.addEventListener('click', function(){ if (!b.classList.contains('is-disabled')) { set(opt, o.value); mark(); } });
-      wrap.appendChild(b); cards.push(b);
+    var cards = []; // {el, sel, value}
+    var minFor = function(sel, val){
+      var min = null;
+      vars.forEach(function(x){
+        var a = x.attributes || {};
+        var ok = sels.every(function(s){ var want = s === sel ? val : s.value; return !want || !a[s.name] || a[s.name] === want; });
+        if (ok && x.is_in_stock && x.is_purchasable !== false) min = min === null ? x.display_price : Math.min(min, x.display_price);
+      });
+      return min;
+    };
+    rows.forEach(function(sel, i){
+      if (i > 0) { var br = document.createElement('div'); br.className = 'omg-ed-break'; br.style.cssText = 'grid-column:1/-1;flex-basis:100%;height:0;margin:0'; wrap.appendChild(br); }
+      if (!sel) {
+        var only = edSel && real(edSel)[0] ? real(edSel)[0].textContent.trim() : 'Standard';
+        var sc = document.createElement('div'); sc.className = 'omg-ed-card is-active'; sc.setAttribute('aria-current', 'true');
+        sc.innerHTML = '<span class="omg-ed-name"></span><span class="omg-radio"></span><span class="omg-ed-sub">Edition</span><span class="omg-ed-price"></span>';
+        sc.querySelector('.omg-ed-name').textContent = only;
+        wrap.appendChild(sc); cards.push({el: sc, sel: null, value: ''});
+        return;
+      }
+      var lab = form.querySelector('label[for="' + sel.id + '"]'); var attrName = lab ? lab.textContent.trim() : '';
+      Array.prototype.forEach.call(sel.options, function(o){
+        if (!o.value) return;
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'omg-ed-card'; b.setAttribute('data-value', o.value);
+        b.innerHTML = '<span class="omg-ed-name"></span><span class="omg-radio"></span><span class="omg-ed-sub"></span><span class="omg-ed-price"></span>';
+        b.querySelector('.omg-ed-name').textContent = o.textContent.trim() + (unit && !/[A-Za-z]/.test(o.textContent) ? ' ' + unit : '');
+        b.querySelector('.omg-ed-sub').textContent = attrName || 'Option';
+        b.addEventListener('click', function(){ if (!b.classList.contains('is-disabled')) { set(sel, o.value); refresh(); } });
+        wrap.appendChild(b); cards.push({el: b, sel: sel, value: o.value});
+      });
+      if (!sel.value) {
+        var mine = cards.filter(function(c){ return c.sel === sel; });
+        var pick = mine.filter(function(c){ return new RegExp('(^|\\D)' + c.value + '(\\D|$)').test(title); })[0] || mine[0];
+        if (pick) set(sel, pick.value);
+      }
+      sel.addEventListener('change', function(){ setTimeout(refresh, 0); });
     });
-    function price(){
-      var r = rg ? rg.value : '';
+    function refresh(){
       cards.forEach(function(c){
-        var v = c.getAttribute('data-value'), min = null;
-        vars.forEach(function(x){ var a = x.attributes || {}; if ((!a[opt.name] || a[opt.name] === v) && (!rg || !r || !a[rg.name] || a[rg.name] === r) && x.is_in_stock && x.is_purchasable !== false) min = min === null ? x.display_price : Math.min(min, x.display_price); });
-        c.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
-        c.classList.toggle('is-disabled', min === null);
+        var min = minFor(c.sel, c.value);
+        c.el.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
+        if (!c.sel) return;
+        c.el.classList.toggle('is-disabled', min === null);
+        var on = c.sel.value === c.value; c.el.classList.toggle('is-active', on); c.el.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
     }
-    function mark(){ cards.forEach(function(c){ var on = c.getAttribute('data-value') === opt.value; c.classList.toggle('is-active', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); }); }
-    if (!opt.value) {
-      var pick = cards.filter(function(c){ return new RegExp('(^|\\D)' + c.getAttribute('data-value') + '(\\D|$)').test(title); })[0] || cards[0];
-      if (pick) set(opt, pick.getAttribute('data-value'));
-    }
-    opt.addEventListener('change', mark);
-    price(); mark();
+    if (rg) rg.addEventListener('change', function(){ setTimeout(refresh, 0); });
+    var hs = holder && holder.querySelector('select'); if (hs) hs.addEventListener('change', function(){ setTimeout(refresh, 0); });
+    refresh();
   }
   var globe = '<svg class="g" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
   var chev = '<svg class="c" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';

@@ -395,7 +395,7 @@ async def test_one_listing_per_platform(
     assert (await publisher().run(queued[-1])).state == "done"
     assert store.products[f"{pid}~switch"]["status"] == "draft"
     assert len(store.products[str(pid)]["body"]["variants"]) == 2
-    assert store.products[str(pid)]["body"]["prune_variations"] is False
+    assert store.products[str(pid)]["body"]["prune_variations"] is True
 
     # Unpublishing takes every listing off.
     await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": True})
@@ -455,3 +455,45 @@ async def test_new_option_on_live_game_is_republished(
     async with get_sessionmaker()() as db:
         m = (await db.execute(select(StorefrontProductMapping))).scalar_one()
     assert len(m.variant_map) == 2
+
+
+async def test_gift_is_its_own_type_and_access_is_not_sold(
+    client: AsyncClient, make_user: MakeUser, store: FakeStore, queued: list[uuid.UUID]
+) -> None:
+    await make_user()
+    await login(client)
+    pid = await seed()
+    async with get_sessionmaker()() as db:
+        k = (await db.execute(select(Supplier).where(Supplier.code == "kinguin"))).scalar_one()
+        svc = CatalogueService(db)
+        for ext, title, platform, act in [
+            ("9", "Hades PC Steam Altergift", "Steam", "gift"),
+            ("10", "Hades Switch Access", "Switch", "access"),
+        ]:
+            await svc.ingest(
+                k,
+                NormalizedProduct(
+                    external_product_id=ext,
+                    original_title=title,
+                    base_title="Hades",
+                    platform=platform,
+                    region="Global",
+                    activation_type=act,
+                    offers=[
+                        NormalizedOffer(
+                            external_offer_id=f"o{ext}", currency="EUR", price=Decimal("9"), quantity=3
+                        )
+                    ],
+                ),
+            )
+        await db.commit()
+    await connect(client, store)
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+    opts = sorted(
+        (v["attributes"]["Platform"], v["attributes"]["Type"])
+        for v in store.products[str(pid)]["body"]["variants"]
+    )
+    assert opts == [("Steam", "Gift"), ("Steam", "Key"), ("Switch", "Key")]

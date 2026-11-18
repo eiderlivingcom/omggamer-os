@@ -92,7 +92,7 @@ function omg_listing_title(string $name, array $platforms, array $regions, strin
     }
     $what = [
         'game_account' => 'Account', 'gift_card' => 'Gift Card', 'game_currency' => 'Top-up', 'dlc' => 'DLC Key',
-        'subscription' => 'Subscription', 'software' => 'Digital Key', 'game' => 'Digital Key',
+        'subscription' => 'Subscription', 'software' => 'Digital Key', 'game' => 'Digital Key', 'gift_link' => 'Gift',
     ][$type] ?? 'Digital Key';
     $t .= ' - ' . $what;
     return ($buy ? 'Buy ' : '') . $t;

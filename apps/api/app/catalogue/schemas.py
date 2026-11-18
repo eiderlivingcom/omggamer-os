@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.catalogue import regions
 from app.db.models.catalogue import AVAILABILITY, MEDIA_TYPES, PRODUCT_STATUSES, PRODUCT_TYPES
 
 ProductType = Literal[
@@ -113,6 +114,11 @@ class OfferOut(ORM):
     availability_status: str
     last_synced_at: datetime | None
 
+    @field_validator("region")
+    @classmethod
+    def _defined_region(cls, v: str | None) -> str | None:
+        return regions.canonical(v) if v else v  # the defined name ("Europe"), not the supplier's "EUROPE"
+
 
 class VariantOut(ORM):
     id: uuid.UUID
@@ -126,6 +132,11 @@ class VariantOut(ORM):
     offer_count: int = 0
     lowest_price: Decimal | None = None
     lowest_price_currency: str | None = None
+
+    @field_validator("region")
+    @classmethod
+    def _defined_region(cls, v: str | None) -> str | None:
+        return regions.canonical(v) if v else v  # the defined name ("Europe"), not the supplier's "EUROPE"
 
 
 class SupplierProductOut(ORM):
