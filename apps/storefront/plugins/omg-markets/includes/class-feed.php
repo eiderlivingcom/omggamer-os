@@ -240,14 +240,44 @@ final class OMG_Markets_Feed
         return ['xml' => $out, 'items' => count($items), 'skipped' => $skipped];
     }
 
+    /**
+     * Shopping title: name, platform, what it is, region; e.g. "Hollow Knight: Silksong – Nintendo Switch Key –
+     * Americas". Platform early because that is how people search; at most 150 characters.
+     */
     private static function title(WC_Product $p, ?WC_Product $parent): string
     {
-        $t = html_entity_decode($parent ? $parent->get_name() : $p->get_name());
-        if ($parent) {
-            $opts = wc_get_formatted_variation($p, true, false, false);
-            if ($opts !== '') {
-                $t .= ' - ' . html_entity_decode(wp_strip_all_tags($opts));
+        $name = html_entity_decode(wp_strip_all_tags($parent ? $parent->get_name() : $p->get_name()), ENT_QUOTES);
+        $attr = static function (WC_Product $x, string $key): string {
+            foreach (['pa_' . $key, $key, ucfirst($key)] as $k) {
+                $v = trim((string) $x->get_attribute($k));
+                if ($v !== '') {
+                    return html_entity_decode(wp_strip_all_tags($v), ENT_QUOTES);
+                }
             }
+            return '';
+        };
+        $platform = $attr($p, 'platform') ?: ($parent ? $attr($parent, 'platform') : '');
+        $region = $attr($p, 'region') ?: ($parent ? $attr($parent, 'region') : '');
+        $edition = $attr($p, 'edition');
+        if (str_contains($platform, ',')) {
+            $platform = ''; // the parent lists several platforms: not one item's platform
+        }
+        if (str_contains($region, ',')) {
+            $region = '';
+        }
+        $type = (string) get_post_meta($parent ? $parent->get_id() : $p->get_id(), '_omg_product_type', true);
+        $what = ['game_account' => 'Account', 'gift_card' => 'Gift Card', 'game_currency' => 'Top-up', 'dlc' => 'DLC Key', 'subscription' => 'Subscription', 'software' => 'Key', 'game' => 'Key'][$type] ?? 'Key';
+        // A per-platform listing is already named "Game (Platform)": do not say the platform twice.
+        if ($platform !== '' && stripos($name, $platform) !== false) {
+            $name = trim((string) preg_replace('/\s*\(' . preg_quote($platform, '/') . '\)\s*$/i', '', $name));
+        }
+        $t = $name;
+        if ($edition !== '' && strcasecmp($edition, 'Standard') !== 0 && stripos($name, $edition) === false) {
+            $t .= ' ' . $edition;
+        }
+        $t .= ' – ' . trim(($platform !== '' ? $platform . ' ' : '') . $what);
+        if ($region !== '' && strcasecmp($region, 'Any') !== 0) {
+            $t .= ' – ' . $region;
         }
         return function_exists('mb_substr') ? mb_substr($t, 0, 150) : substr($t, 0, 150);
     }

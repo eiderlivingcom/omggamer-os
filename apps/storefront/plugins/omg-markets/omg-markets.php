@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OMGGamer Markets
  * Description: Country markets with local currencies (European Central Bank daily reference rates) and a Google Merchant Center product feed per country.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: OMGGamer
  * Requires Plugins: woocommerce
  * Text Domain: omg-markets
