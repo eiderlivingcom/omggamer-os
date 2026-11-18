@@ -182,8 +182,8 @@ class OMG_Connector_Products
      * Prices, stock and options of a published product. Its content (title, texts, images, video, categories, SEO)
      * stays as it is on the store. Variants are matched by OMGGamer variant ID, else by options; an option the store
      * does not have yet (a new region or edition) is added. With $prune (one listing per platform) options of other
-     * platforms are hidden, never deleted (orders may reference them), and come back when the game is one listing
-     * again.
+     * platforms are moved to the trash, never deleted (orders may reference them), and come back when the game is
+     * one listing again.
      */
     private function update_live_prices($product_id, array $variants, $product_sku = '', $prune = false)
     {
@@ -225,6 +225,10 @@ class OMG_Connector_Products
                 $this->warnings[] = 'No matching option on the store for ' . implode(' / ', array_map('strval', (array) ($v['attributes'] ?? []))) . '.';
                 continue;
             }
+            if ($variable && get_post_status($target_id) === 'trash') {
+                wp_untrash_post($target_id); // set aside for another platform's listing earlier, back now
+                $target = wc_get_product($target_id);
+            }
             if ($variable && $target->get_status() !== 'publish') {
                 $target->set_status('publish'); // hidden earlier (other platform / no longer sold) and back now
             }
@@ -238,14 +242,13 @@ class OMG_Connector_Products
         }
         if ($variable && $prune) {
             $keep = array_map('intval', array_values($map));
-            $parent = wc_get_product($product_id);
-            foreach ($parent ? $parent->get_children() : [] as $child_id) {
+            // Every variation, private ones included (get_children() lists only visible ones).
+            $all = get_posts(['post_type' => 'product_variation', 'post_parent' => $product_id, 'post_status' => ['publish', 'private', 'draft', 'pending'], 'numberposts' => -1, 'fields' => 'ids']);
+            foreach ($all as $child_id) {
                 if (!in_array((int) $child_id, $keep, true) && get_post_meta($child_id, '_omg_variant_id', true) !== '') {
-                    $child = wc_get_product($child_id);
-                    if ($child && $child->get_status() !== 'private') {
-                        $child->set_status('private');
-                        $child->save();
-                    }
+                    // Trash, not private: WooCommerce still lists private variations' options in the dropdowns.
+                    // Trashed variations stay in the database (orders keep their link) and come back on fold-back.
+                    wp_trash_post($child_id);
                 }
             }
         }
