@@ -5,7 +5,7 @@
  *              group (_omg_listing_group). Their product pages show a "Platform" switcher above the edition/region
  *              picker: the current platform is selected, the others link to their own listing and keep the chosen
  *              region (?attribute_pa_region=...) when that listing sells it.
- * Version: 1.0.0
+ * Version: 1.0.1
  */
 
 if (!defined('ABSPATH')) {
@@ -96,7 +96,11 @@ final class OMG_Platform_Listings
   var box = document.getElementById('omg-pl'); if (!box) return;
   // Above the edition / region picker, else above the add-to-cart form.
   var anchor = document.getElementById('omg-dg-ed') || document.querySelector('form.variations_form, form.cart');
-  if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor);
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(box, anchor);
+    // The product layout orders its cards with CSS "order": take the edition card's slot, just before it.
+    var ord = getComputedStyle(anchor).order; if (ord && ord !== '0') box.style.order = ord;
+  }
   box.hidden = false;
   var links = box.querySelectorAll('.omg-pl-item:not(.is-active)');
   var base = []; links.forEach(function (a) { base.push(a.href); });
