@@ -341,6 +341,14 @@ async def _sync_push(full: bool) -> dict[str, int]:
                 (await db.execute(select(Storefront).where(Storefront.status == "active"))).scalars()
             ):
                 stats = await service.push_prices(db, sf, since=since, full=full or since is None)
+                # New regions / editions / platforms on live games are added by re-publishing them.
+                new_ids = await service.queue_new_options(db, sf)
+                await db.commit()
+                if new_ids:
+                    from app.publishing import queue as publish_queue
+
+                    publish_queue.enqueue(new_ids)
+                stats["republished"] = len(new_ids)
                 for k, v in stats.items():
                     totals[k] = totals.get(k, 0) + v
             await service.save_settings(db, {"last_push_at": started.isoformat()})

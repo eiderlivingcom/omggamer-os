@@ -16,10 +16,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.ai import settings as ai_settings
-from app.catalogue import regions
+from app.catalogue import regions, sku
 from app.catalogue.normalize import payload_checksum, slugify
 from app.core.logging import log
 from app.db.models import (
+    AppSetting,
     Product,
     ProductCategory,
     ProductCategoryMapping,
@@ -75,7 +76,55 @@ async def category_paths(db: AsyncSession, product_id: uuid.UUID) -> list[list[s
     return sorted(paths)
 
 
-async def build_payload(db: AsyncSession, product: Product, sf: Storefront, status: str) -> dict[str, Any]:
+# Main listing (keeps the game's existing store page): the first of these platforms the game has, else the
+# platform with the most options.
+MAIN_PLATFORMS = ("Steam", "PC", "Epic Games", "GOG", "EA App", "Ubisoft Connect", "Battle.net", "Rockstar")
+
+
+async def split_by_platform(db: AsyncSession, product: Product) -> bool:
+    """One store listing per platform: off, for selected games ("selected"), or for every game ("all")."""
+    row = await db.get(AppSetting, "publishing")
+    cfg = (row.value if row else None) or {}
+    mode = cfg.get("split_by_platform", "selected")
+    if mode == "all":
+        return True
+    return mode == "selected" and str(product.id) in set(cfg.get("split_products") or [])
+
+
+async def listing_groups(db: AsyncSession, product: Product) -> list[tuple[str, str | None]]:
+    """[(listing key, platform)]: ("", None) for one listing, else ("", main platform) + one per platform."""
+    if not await split_by_platform(db, product):
+        return [("", None)]
+    variants = list(
+        (await db.execute(select(ProductVariant).where(ProductVariant.product_id == product.id))).scalars()
+    )
+    counts: dict[str, int] = {}
+    for v in variants:
+        p = regions.platform_name(v.platform) or ""
+        counts[p] = counts.get(p, 0) + 1
+    platforms = [p for p in counts if p]
+    if len(platforms) <= 1:
+        return [("", None)]
+    main = (
+        next((p for p in MAIN_PLATFORMS if p in counts), None)
+        or sorted(platforms, key=lambda p: (-counts[p], p))[0]
+    )
+    return [("", main)] + [(slugify(p), p) for p in sorted(platforms) if p != main]
+
+
+def listing_external_id(product: Product, listing: str) -> str:
+    return str(product.id) if not listing else f"{product.id}~{listing}"
+
+
+async def build_payload(
+    db: AsyncSession,
+    product: Product,
+    sf: Storefront,
+    status: str,
+    *,
+    platform: str | None = None,
+    listing: str = "",
+) -> dict[str, Any]:
     variants = list(
         (
             await db.execute(
@@ -117,13 +166,20 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
     for v in sorted(variants, key=rank):
         best.setdefault(((platform_of[v.id] or "").lower(), (v.edition or "").lower(), region_of[v.id]), v)
     keep = {v.id for v in best.values()}
+    if platform is not None:
+        # One listing per platform: only this platform's options.
+        group_ids = [v.id for v in variants if platform_of[v.id] == platform]
+        keep &= set(group_ids)
+    else:
+        group_ids = [v.id for v in variants]
     variants = [v for v in variants if v.id in keep]
+    if not variants:
+        raise PublishError(f"No options for {platform or 'this game'}.")
 
     in_stock = await db.scalar(
         select(
             exists().where(
-                SupplierOffer.variant_id == ProductVariant.id,
-                ProductVariant.product_id == product.id,
+                SupplierOffer.variant_id.in_(group_ids),
                 SupplierOffer.availability_status.in_(("in_stock", "preorder")),
                 SupplierOffer.available_quantity > 0,
             )
@@ -131,7 +187,9 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
     )
     listed = await db.scalar(
         select(StorefrontProductMapping.id).where(
-            StorefrontProductMapping.product_id == product.id, StorefrontProductMapping.storefront_id == sf.id
+            StorefrontProductMapping.product_id == product.id,
+            StorefrontProductMapping.storefront_id == sf.id,
+            StorefrontProductMapping.listing == listing,
         )
     )
     if status == "publish" and not in_stock and listed is None:
@@ -203,11 +261,16 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
         if value:
             display.append({"name": name, "options": [x.strip() for x in str(value).split(",") if x.strip()]})
 
+    name = content.title if content and content.title else product.canonical_title
+    if platform is not None and platform.lower() not in name.lower():
+        name = f"{name} ({platform})"
     return {
-        "external_id": str(product.id),
-        "sku": product.sku,
-        "name": content.title if content and content.title else product.canonical_title,
-        "slug": product.slug,
+        "external_id": listing_external_id(product, listing),
+        "sku": product.sku if not listing else f"{product.sku}-{sku.platform_code(platform)}",
+        "name": name,
+        "slug": product.slug if not listing else f"{product.slug}-{listing}",
+        # A per-platform listing only has its platform's options: the store drops any others it still has.
+        "prune_variations": platform is not None,
         "status": status,
         "short_description": content.short_description if content else "",
         "description": (content.long_description or "").replace("\n\n", "</p><p>").join(["<p>", "</p>"])
@@ -245,6 +308,9 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
         ],
         "meta": {
             "kinguin_ids": ",".join(ext_ids),
+            # Listings of one game share the group, so the store can link them (platform switcher).
+            "listing_group": str(product.id),
+            "listing_platform": platform or "",
             "product_type": product.product_type,
             # What each region on this product means, for the region note on the product page.
             "region_notes": {
@@ -291,102 +357,178 @@ class Publisher:
             # Plain values stay valid after a rollback expires the ORM objects.
             pid, sf_id, attempts = product.id, sf.id, item.attempts
 
-            mapping = (
-                await db.execute(
-                    select(StorefrontProductMapping).where(
-                        StorefrontProductMapping.storefront_id == sf.id,
-                        StorefrontProductMapping.product_id == product.id,
-                    )
-                )
-            ).scalar_one_or_none()
+            if item.action == "unpublish":
+                return await self._unpublish(db, item, sf, product)
             try:
-                if item.action == "unpublish":
-                    return await self._unpublish(db, item, sf, product, mapping)
                 if product.product_status not in ("approved", "published", "unpublished"):
                     raise PublishError(
                         f"The product is {product.product_status}; only approved products are published."
                     )
-                payload = await build_payload(db, product, sf, "publish")
+                groups = await listing_groups(db, product)
             except PublishError as exc:
                 await db.rollback()
                 return await self._fail(db, item, sf_id, str(exc), pid)
 
-            digest = payload_checksum(payload)
-            if mapping and mapping.last_hash == digest and mapping.sync_status == "synced":
-                # The store already has exactly this version: the product is live there.
-                product.product_status = "published"
-                item.status = "completed"
-                item.last_error = None
+            published: list[str] = []
+            skipped: list[str] = []
+            unchanged = 0
+            for listing, platform in groups:
+                mapping = (
+                    await db.execute(
+                        select(StorefrontProductMapping).where(
+                            StorefrontProductMapping.storefront_id == sf.id,
+                            StorefrontProductMapping.product_id == product.id,
+                            StorefrontProductMapping.listing == listing,
+                        )
+                    )
+                ).scalar_one_or_none()
+                try:
+                    payload = await build_payload(
+                        db, product, sf, "publish", platform=platform, listing=listing
+                    )
+                except PublishError as exc:
+                    if listing and len(groups) > 1:
+                        # Another platform of the game can still go live; this one waits for an offer.
+                        skipped.append(f"{platform}: {exc}")
+                        continue
+                    await db.rollback()
+                    return await self._fail(db, item, sf_id, str(exc), pid)
+
+                digest = payload_checksum(payload)
+                if (
+                    mapping
+                    and mapping.last_hash == digest
+                    and mapping.sync_status == "synced"
+                    and {v["variant_id"] for v in payload["variants"]} <= set(mapping.variant_map or {})
+                ):
+                    published.append(listing)  # the store already has exactly this version
+                    unchanged += 1
+                    db.add(
+                        SyncLog(
+                            storefront_id=sf.id,
+                            product_id=product.id,
+                            operation="update",
+                            status="skipped",
+                            response={"message": "unchanged since last sync", "listing": listing or "main"},
+                        )
+                    )
+                    continue
+
+                try:
+                    client = ConnectorClient(sf)
+                except ConnectorError as exc:
+                    await db.rollback()
+                    return await self._fail(db, item, sf_id, str(exc), pid)
+                try:
+                    result = await client.upsert(payload, f"{item.id}:{listing}:{digest[:16]}")
+                except ConnectorError as exc:
+                    await db.rollback()
+                    if exc.temporary and attempts < MAX_ATTEMPTS:
+                        return await self._retry(db, item, sf_id, str(exc), pid)
+                    return await self._fail(db, item, sf_id, str(exc), pid)
+                finally:
+                    await client.aclose()
+
+                values = {
+                    "external_product_id": str(result.get("product_id") or ""),
+                    "sync_status": "synced",
+                    "last_synced_at": now(),
+                    "last_hash": digest,
+                    "last_error": None,
+                    "variant_map": {str(k): v for k, v in (result.get("variations") or {}).items()},
+                }
+                stmt = pg_insert(StorefrontProductMapping).values(
+                    storefront_id=sf.id, product_id=product.id, listing=listing, **values
+                )
+                await db.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=["storefront_id", "product_id", "listing"], set_=values
+                    )
+                )
+                await mark_pushed(db, sf_id, [uuid.UUID(v["variant_id"]) for v in payload["variants"]])
+                published.append(listing)
                 db.add(
                     SyncLog(
                         storefront_id=sf.id,
                         product_id=product.id,
-                        operation="update",
-                        status="skipped",
-                        response={"message": "unchanged since last sync"},
+                        operation="create" if result.get("created") else "update",
+                        status="success",
+                        response={
+                            "listing": listing or "main",
+                            "platform": platform,
+                            **{
+                                k: result.get(k)
+                                for k in (
+                                    "product_id",
+                                    "created",
+                                    "type",
+                                    "status",
+                                    "permalink",
+                                    "warnings",
+                                    "idempotent_replay",
+                                    "locked",
+                                )
+                            },
+                        },
                     )
                 )
-                await db.commit()
-                return PublishOutcome("skipped")
+                log.info(
+                    "published",
+                    product_id=str(product.id),
+                    listing=listing or "main",
+                    storefront=sf.code,
+                    wc_id=result.get("product_id"),
+                )
 
-            try:
-                client = ConnectorClient(sf)
-            except ConnectorError as exc:
+            if not published:
                 await db.rollback()
-                return await self._fail(db, item, sf_id, str(exc), pid)
-            try:
-                result = await client.upsert(payload, f"{item.id}:{digest[:16]}")
-            except ConnectorError as exc:
-                await db.rollback()
-                if exc.temporary and attempts < MAX_ATTEMPTS:
-                    return await self._retry(db, item, sf_id, str(exc), pid)
-                return await self._fail(db, item, sf_id, str(exc), pid)
-            finally:
-                await client.aclose()
-
-            values = {
-                "external_product_id": str(result.get("product_id") or ""),
-                "sync_status": "synced",
-                "last_synced_at": now(),
-                "last_hash": digest,
-                "last_error": None,
-                "variant_map": {str(k): v for k, v in (result.get("variations") or {}).items()},
-            }
-            stmt = pg_insert(StorefrontProductMapping).values(
-                storefront_id=sf.id, product_id=product.id, **values
-            )
-            await db.execute(
-                stmt.on_conflict_do_update(index_elements=["storefront_id", "product_id"], set_=values)
-            )
-            await mark_pushed(db, sf_id, [uuid.UUID(v["variant_id"]) for v in payload["variants"]])
+                return await self._fail(db, item, sf_id, "; ".join(skipped) or "Nothing was published.", pid)
+            # Platform listings the game no longer has (or splitting switched off): take them off the store.
+            stale = await self._draft_stale(db, item, sf, product, {k for k, _ in groups})
+            if stale:
+                skipped.append(stale)
             product.product_status = "published"
             item.status = "completed"
-            item.last_error = None
-            db.add(
-                SyncLog(
-                    storefront_id=sf.id,
-                    product_id=product.id,
-                    operation="create" if result.get("created") else "update",
-                    status="success",
-                    response={
-                        k: result.get(k)
-                        for k in (
-                            "product_id",
-                            "created",
-                            "type",
-                            "status",
-                            "permalink",
-                            "warnings",
-                            "idempotent_replay",
-                        )
-                    },
-                )
-            )
+            item.last_error = "; ".join(skipped)[:2000] or None
             await db.commit()
-            log.info(
-                "published", product_id=str(product.id), storefront=sf.code, wc_id=result.get("product_id")
-            )
-            return PublishOutcome("done")
+            return PublishOutcome("skipped" if unchanged == len(published) and not stale else "done")
+
+    async def _draft_stale(
+        self, db: AsyncSession, item: PublishingQueueItem, sf: Storefront, product: Product, keep: set[str]
+    ) -> str | None:
+        """Draft extra listings that are not in the current listing groups. Returns a note on failure."""
+        rows = list(
+            (
+                await db.execute(
+                    select(StorefrontProductMapping).where(
+                        StorefrontProductMapping.storefront_id == sf.id,
+                        StorefrontProductMapping.product_id == product.id,
+                        StorefrontProductMapping.listing != "",
+                        StorefrontProductMapping.sync_status == "synced",
+                    )
+                )
+            ).scalars()
+        )
+        rows = [m for m in rows if m.listing not in keep]
+        if not rows:
+            return None
+        try:
+            client = ConnectorClient(sf)
+        except ConnectorError as exc:
+            return f"Old platform listings not drafted: {exc}"
+        try:
+            for m in rows:
+                await client.set_status(
+                    listing_external_id(product, m.listing), "draft", f"{item.id}:retire:{m.listing}"
+                )
+                m.sync_status = "unpublished"
+                m.last_hash = None
+                m.last_synced_at = now()
+        except ConnectorError as exc:
+            return f"Old platform listings not drafted: {exc}"
+        finally:
+            await client.aclose()
+        return None
 
     async def _unpublish(
         self,
@@ -394,10 +536,21 @@ class Publisher:
         item: PublishingQueueItem,
         sf: Storefront,
         product: Product,
-        mapping: StorefrontProductMapping | None,
     ) -> PublishOutcome:
+        """Take every listing of the game off the store (draft)."""
         pid, sf_id, attempts = product.id, sf.id, item.attempts
-        if mapping is None or not mapping.external_product_id:
+        mappings = list(
+            (
+                await db.execute(
+                    select(StorefrontProductMapping).where(
+                        StorefrontProductMapping.storefront_id == sf.id,
+                        StorefrontProductMapping.product_id == product.id,
+                        StorefrontProductMapping.external_product_id.is_not(None),
+                    )
+                )
+            ).scalars()
+        )
+        if not mappings:
             item.status = "completed"
             await db.commit()
             return PublishOutcome("skipped")
@@ -406,7 +559,10 @@ class Publisher:
         except ConnectorError as exc:
             return await self._fail(db, item, sf_id, str(exc), pid)
         try:
-            await client.set_status(str(pid), "draft", f"{item.id}:unpublish")
+            for m in mappings:
+                await client.set_status(
+                    listing_external_id(product, m.listing), "draft", f"{item.id}:unpublish:{m.listing}"
+                )
         except ConnectorError as exc:
             await db.rollback()
             if exc.temporary and attempts < MAX_ATTEMPTS:
@@ -414,14 +570,15 @@ class Publisher:
             return await self._fail(db, item, sf_id, str(exc), pid)
         finally:
             await client.aclose()
-        mapping.sync_status = "unpublished"
-        mapping.last_synced_at = now()
-        mapping.last_hash = None
+        for m in mappings:
+            m.sync_status = "unpublished"
+            m.last_synced_at = now()
+            m.last_hash = None
         others = await db.scalar(
             select(StorefrontProductMapping.id).where(
                 StorefrontProductMapping.product_id == product.id,
                 StorefrontProductMapping.sync_status == "synced",
-                StorefrontProductMapping.id != mapping.id,
+                StorefrontProductMapping.storefront_id != sf.id,
             )
         )
         if not others and product.product_status == "published":
@@ -433,7 +590,7 @@ class Publisher:
                 product_id=product.id,
                 operation="unpublish",
                 status="success",
-                response={},
+                response={"listings": len(mappings)},
             )
         )
         await db.commit()
@@ -460,11 +617,14 @@ class Publisher:
         )
         if final:
             values = {"sync_status": "failed", "last_error": message[:2000]}
+            # Recorded on the game's main listing.
             stmt = pg_insert(StorefrontProductMapping).values(
-                storefront_id=sf_id, product_id=product_id, **values
+                storefront_id=sf_id, product_id=product_id, listing="", **values
             )
             await db.execute(
-                stmt.on_conflict_do_update(index_elements=["storefront_id", "product_id"], set_=values)
+                stmt.on_conflict_do_update(
+                    index_elements=["storefront_id", "product_id", "listing"], set_=values
+                )
             )
 
     async def _fail(

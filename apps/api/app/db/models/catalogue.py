@@ -310,7 +310,7 @@ class Storefront(UUIDPk, Timestamps, Base):
 class StorefrontProductMapping(UUIDPk, Timestamps, Base):
     __tablename__ = "storefront_product_mappings"
     __table_args__ = (
-        UniqueConstraint("storefront_id", "product_id"),
+        UniqueConstraint("storefront_id", "product_id", "listing"),
         UniqueConstraint("storefront_id", "external_product_id"),
     )
     storefront_id: Mapped[uuid.UUID] = mapped_column(
@@ -319,6 +319,8 @@ class StorefrontProductMapping(UUIDPk, Timestamps, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # "" is the game's main listing; a platform slug (e.g. "nintendo-switch") is a per-platform listing.
+    listing: Mapped[str] = mapped_column(String(60), nullable=False, default="", server_default="")
     external_product_id: Mapped[str | None] = mapped_column(String(80))  # WooCommerce product ID
     sync_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

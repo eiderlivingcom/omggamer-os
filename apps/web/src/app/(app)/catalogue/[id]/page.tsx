@@ -101,6 +101,58 @@ function AliasCard({ productId, canEdit }: { productId: string; canEdit: boolean
   );
 }
 
+type ListingInfo = {
+  mode: "off" | "selected" | "all";
+  selected: boolean;
+  listings: { listing: string; platform: string | null }[];
+  store: { listing: string; status: string; wc_id: string | null; variations: number }[];
+};
+
+function PlatformListings({ productId, canManage }: { productId: string; canManage: boolean }) {
+  const [info, setInfo] = useState<ListingInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => api<ListingInfo>(`/publishing/products/${productId}/listings`).then(setInfo).catch(() => undefined), [productId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  async function toggle(enabled: boolean) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api<{ queued: boolean }>(`/publishing/products/${productId}/split`, { method: "PUT", json: { enabled } });
+      setMsg(r.queued ? "Saved. The game is being re-published to the store now." : "Saved. It applies the next time the game is published.");
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!info) return null;
+  const on = info.mode === "all" || (info.mode === "selected" && info.selected);
+  return (
+    <Card title="One listing per platform">
+      <p className="mb-3 text-xs text-ink-500">
+        Each platform gets its own store listing with its regions as options; the main platform keeps the original URL and a switcher links them. Content stays as it is on the store.
+      </p>
+      <dl className="mb-3 divide-y divide-ink-100">
+        <Row k="Status" v={info.mode === "all" ? "On for every game" : info.mode === "off" ? "Off for every game" : on ? "On for this game" : "Off for this game"} />
+        <Row k="Listings" v={info.listings.map((l) => (l.listing === "main" ? `${l.platform ?? "All platforms"} (main)` : l.platform)).join(" · ")} />
+        {info.store.length > 0 && (
+          <Row k="On the store" v={info.store.map((m) => `${m.listing}: ${m.status} · #${m.wc_id ?? "—"} · ${m.variations} options`).join("  |  ")} />
+        )}
+      </dl>
+      {canManage && info.mode === "selected" && (
+        <Button disabled={busy} variant={on ? "ghost" : undefined} onClick={() => toggle(!on)}>
+          {on ? "Turn off for this game" : "Turn on for this game"}
+        </Button>
+      )}
+      {msg && <p className="mt-2 text-xs text-ink-500">{msg}</p>}
+    </Card>
+  );
+}
+
 function flatten(nodes: CategoryNode[], depth = 0): { id: string; name: string }[] {
   return nodes.flatMap((n) => [{ id: n.id, name: `${"— ".repeat(depth)}${n.name}` }, ...flatten(n.children, depth + 1)]);
 }
@@ -434,11 +486,12 @@ export default function ProductPage() {
 
       {tab === "publishing" && (
         <div className="space-y-6">
+          <PlatformListings productId={p.id} canManage={can("publishing:manage")} />
           <Card title="Storefront listings">
             {!history ? <div className="h-16 animate-pulse rounded-lg bg-ink-50" /> : history.mappings.length === 0 ? <Empty title="Not published to any storefront" /> : (
               <dl className="divide-y divide-ink-100">
-                {history.mappings.map((m) => (
-                  <Row key={m.storefront} k={m.storefront} v={<>{m.sync_status} · WooCommerce #{m.external_product_id ?? "—"} · {fmtDate(m.last_synced_at)}{m.last_error && <span className="block text-xs text-rose-700">{m.last_error}</span>}</>} />
+                {history.mappings.map((m, i) => (
+                  <Row key={`${m.storefront}-${i}`} k={m.storefront} v={<>{m.sync_status} · WooCommerce #{m.external_product_id ?? "—"} · {fmtDate(m.last_synced_at)}{m.last_error && <span className="block text-xs text-rose-700">{m.last_error}</span>}</>} />
                 ))}
               </dl>
             )}

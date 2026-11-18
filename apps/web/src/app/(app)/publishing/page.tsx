@@ -29,6 +29,50 @@ const TONE: Record<string, "ok" | "warn" | "bad" | "info" | "muted"> = {
   queued: "info", running: "info", completed: "ok", failed: "bad", cancelled: "muted", success: "ok", skipped: "muted",
 };
 
+function SplitSetting({ canManage }: { canManage: boolean }) {
+  const [mode, setMode] = useState<string | null>(null);
+  const [count, setCount] = useState(0);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ split_by_platform: string; split_products: string[] }>("/publishing/settings")
+      .then((r) => {
+        setMode(r.split_by_platform);
+        setCount(r.split_products.length);
+      })
+      .catch(() => undefined);
+  }, []);
+  async function save(v: string) {
+    setMsg(null);
+    try {
+      await api("/publishing/settings", { method: "PUT", json: { split_by_platform: v } });
+      setMode(v);
+      setMsg("Saved. Games change the next time they are published or updated.");
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : "Could not save.");
+    }
+  }
+  if (mode === null) return null;
+  return (
+    <Card title="One listing per platform">
+      <p className="mb-3 text-xs text-ink-500">
+        A game sold on several platforms gets one store listing per platform (regions as options). The main platform keeps the original URL; a switcher on the product page links the others.
+      </p>
+      <select
+        className="h-9 rounded-md border border-ink-200 bg-white px-2 text-sm"
+        value={mode}
+        disabled={!canManage}
+        onChange={(e) => void save(e.target.value)}
+        aria-label="One listing per platform"
+      >
+        <option value="off">Off: one listing per game</option>
+        <option value="selected">Selected games only ({count} on)</option>
+        <option value="all">Every game</option>
+      </select>
+      {msg && <p className="mt-2 text-xs text-ink-500">{msg}</p>}
+    </Card>
+  );
+}
+
 export default function PublishingPage() {
   const { can } = useSession();
   const manage = can("publishing:manage");
@@ -162,6 +206,7 @@ export default function PublishingPage() {
 
       {tab === "storefronts" && (
         <div className="space-y-6">
+          <SplitSetting canManage={can("settings:manage")} />
           {secret && (
             <Notice tone="ok">
               <div className="font-semibold">Connector secret for {secret.code} (shown once)</div>

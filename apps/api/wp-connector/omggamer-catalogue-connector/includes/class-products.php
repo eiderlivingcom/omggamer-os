@@ -61,7 +61,7 @@ class OMG_Connector_Products
         // A product that is live on the store keeps everything the store has (title, descriptions, images, video,
         // attributes, categories, tags, SEO): OMGGamer OS only updates its prices and stock.
         if ($id && get_post_status($id) === 'publish' && self::content_locked() && empty($p['replace_content'])) {
-            return $this->update_live_prices($id, $variants, (string) ($p['sku'] ?? ''));
+            return $this->update_live_prices($id, $variants, (string) ($p['sku'] ?? ''), !empty($p['prune_variations']));
         }
         if ($id && get_post_status($id) === 'trash') {
             wp_untrash_post($id);
@@ -174,35 +174,55 @@ class OMG_Connector_Products
         return (int) get_option('omg_connector_lock_published', 1) === 1;
     }
 
-    /** Prices and stock of a published product; variants are matched by OMGGamer variant ID, else by options. */
-    private function update_live_prices($product_id, array $variants, $product_sku = '')
+    /**
+     * Prices, stock and options of a published product. Its content (title, texts, images, video, categories, SEO)
+     * stays as it is on the store. Variants are matched by OMGGamer variant ID, else by options; an option the store
+     * does not have yet (a new region or edition) is added. With $prune (one listing per platform) options of other
+     * platforms are hidden, never deleted (orders may reference them), and come back when the game is one listing
+     * again.
+     */
+    private function update_live_prices($product_id, array $variants, $product_sku = '', $prune = false)
     {
         $variable = WC_Product_Factory::get_product_type($product_id) === 'variable';
-        // SKUs are identifiers, not content: keep them in step with OMGGamer OS.
-        if ($variable && $product_sku !== '') {
+        if ($variable) {
             $parent = wc_get_product($product_id);
             if ($parent) {
-                $this->apply_sku($parent, $product_sku);
+                // SKUs are identifiers, not content: keep them in step with OMGGamer OS.
+                if ($product_sku !== '') {
+                    $this->apply_sku($parent, $product_sku);
+                }
+                $this->refresh_option_attributes($parent, $variants, $prune);
                 $parent->save();
             }
         }
         $map = [];
-        foreach ($variants as $v) {
+        foreach ($variants as $i => $v) {
             $vid = sanitize_text_field($v['variant_id'] ?? '');
             $target_id = $variable ? self::find_variation($product_id, $vid) : $product_id;
             if ($variable && !$target_id) {
                 $target_id = $this->variation_by_options($product_id, (array) ($v['attributes'] ?? []));
-                if ($target_id) {
-                    update_post_meta($target_id, '_omg_variant_id', $vid); // remember the new mapping
-                }
+            }
+            if ($variable && !$target_id && $vid !== '') {
+                $new = new WC_Product_Variation();
+                $new->set_parent_id($product_id);
+                $new->set_virtual(true);
+                $new->set_attributes($this->variation_attributes($v));
+                $new->set_menu_order($i);
+                $target_id = $new->save();
+            }
+            if ($variable && $target_id) {
+                update_post_meta($target_id, '_omg_variant_id', $vid); // remember the mapping
             }
             if (!$variable && count($variants) > 1) {
                 $this->warnings[] = 'The store has this product as a single item; only the first price was updated.';
             }
             $target = $target_id ? wc_get_product($target_id) : null;
             if (!$target) {
-                $this->warnings[] = 'No matching option on the store for ' . implode(' / ', array_map('strval', (array) ($v['attributes'] ?? []))) . '; not added (content is locked).';
+                $this->warnings[] = 'No matching option on the store for ' . implode(' / ', array_map('strval', (array) ($v['attributes'] ?? []))) . '.';
                 continue;
+            }
+            if ($variable && $target->get_status() !== 'publish') {
+                $target->set_status('publish'); // hidden earlier (other platform / no longer sold) and back now
             }
             $this->apply_sku($target, $v['sku'] ?? '');
             $this->apply_price($target, $v);
@@ -210,6 +230,19 @@ class OMG_Connector_Products
             $map[$vid] = $target_id;
             if (!$variable) {
                 break;
+            }
+        }
+        if ($variable && $prune) {
+            $keep = array_map('intval', array_values($map));
+            $parent = wc_get_product($product_id);
+            foreach ($parent ? $parent->get_children() : [] as $child_id) {
+                if (!in_array((int) $child_id, $keep, true) && get_post_meta($child_id, '_omg_variant_id', true) !== '') {
+                    $child = wc_get_product($child_id);
+                    if ($child && $child->get_status() !== 'private') {
+                        $child->set_status('private');
+                        $child->save();
+                    }
+                }
             }
         }
         if ($variable) {
@@ -228,6 +261,31 @@ class OMG_Connector_Products
             'variations' => $map,
             'warnings' => $this->warnings,
         ];
+    }
+
+    /**
+     * The option lists (Platform, Region, Edition...) of a live variable product. Adds values the variants need;
+     * with $prune they become exactly the values sent. Other attributes (developer, genre...) are left alone.
+     */
+    private function refresh_option_attributes($parent, array $variants, $prune)
+    {
+        $attrs = $parent->get_attributes();
+        $pos = count($attrs);
+        foreach ($this->dimensions($variants) as $name => $values) {
+            $obj = $this->attribute_object($name, $values, $pos, true);
+            $key = sanitize_title($obj->get_name());
+            if (isset($attrs[$key])) {
+                $old = $attrs[$key];
+                $options = $prune ? $obj->get_options() : array_values(array_unique(array_merge($old->get_options(), $obj->get_options())));
+                $old->set_options($options);
+                $old->set_variation(true);
+                $attrs[$key] = $old;
+            } else {
+                $pos++;
+                $attrs[$key] = $obj;
+            }
+        }
+        $parent->set_attributes($attrs);
     }
 
     /** A variation whose options (Platform, Edition, Region...) match, compared by slug. */

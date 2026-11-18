@@ -87,6 +87,11 @@ class FakeStore:
                     v["variant_id"]: self.products[ext]["id"] * 10 + i for i, v in enumerate(body["variants"])
                 },
             }
+        elif path == "/products/prices":
+            res = {
+                "ok": True,
+                "results": [{"variant_id": i["variant_id"], "ok": True} for i in body["items"]],
+            }
         elif path == "/products/status":
             self.products[body["external_id"]]["status"] = body["status"]
             res = {"ok": True, "status": body["status"]}
@@ -330,3 +335,123 @@ async def test_secret_requires_super_admin(client: AsyncClient, make_user: MakeU
     await login(client, "cat@omggamer.com")
     assert (await client.post("/api/v1/storefronts/omggamer-staging/connector/secret")).status_code == 403
     assert (await client.get("/api/v1/storefronts/omggamer-staging/connector")).json()["secret_set"] is False
+
+
+async def test_one_listing_per_platform(
+    client: AsyncClient, make_user: MakeUser, store: FakeStore, queued: list[uuid.UUID]
+) -> None:
+    await make_user()
+    await login(client)
+    pid = await seed()
+    await connect(client, store)
+
+    # Published as one listing first (the game is not selected for splitting yet).
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+    assert set(store.products) == {str(pid)} and len(store.products[str(pid)]["body"]["variants"]) == 2
+
+    info = (await client.get(f"/api/v1/publishing/products/{pid}/listings")).json()
+    assert info["mode"] == "selected" and info["selected"] is False
+    assert info["listings"] == [{"listing": "main", "platform": None}]
+
+    # Turning it on re-publishes straight away: Steam keeps the original listing, Switch gets its own.
+    r = (await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": True})).json()
+    assert r == {"enabled": True, "queued": True}
+    assert (await publisher().run(queued[-1])).state == "done"
+    main, switch = store.products[str(pid)]["body"], store.products[f"{pid}~switch"]["body"]
+    assert main["slug"] == "hades" and main["prune_variations"] is True
+    assert [v["attributes"]["Platform"] for v in main["variants"]] == ["Steam"]
+    assert [v["attributes"]["Platform"] for v in switch["variants"]] == ["Switch"]
+    assert switch["slug"] == "hades-switch" and switch["name"].endswith("(Switch)")
+    assert switch["sku"].endswith("-NSW") and switch["meta"]["listing_group"] == main["meta"]["listing_group"]
+    async with get_sessionmaker()() as db:
+        maps = {m.listing: m for m in (await db.execute(select(StorefrontProductMapping))).scalars()}
+    assert set(maps) == {"", "switch"} and len(maps["switch"].variant_map) == 1
+
+    # Price updates go to the listing that holds the variant.
+    from app.db.models import Storefront
+    from app.sync.service import push_prices
+
+    async with get_sessionmaker()() as db:
+        sf = (await db.execute(select(Storefront).where(Storefront.code == "omggamer-staging"))).scalar_one()
+        assert sf is not None
+        from sqlalchemy import update as sa_update
+
+        from app.db.models.pricing import VariantPrice
+
+        await db.execute(sa_update(VariantPrice).values(pushed_at=None))
+        await push_prices(db, sf, since=None, full=True)
+        await db.commit()
+    price_calls = [c for c in store.calls if c[0] == "/products/prices"]
+    assert price_calls
+    ext = {i["external_id"] for _, b in price_calls for i in b["items"]}
+    assert ext == {str(pid), f"{pid}~switch"}
+
+    # Turning it off folds the game back into one listing and drafts the Switch one.
+    r = (await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": False})).json()
+    assert r["queued"] is True
+    assert (await publisher().run(queued[-1])).state == "done"
+    assert store.products[f"{pid}~switch"]["status"] == "draft"
+    assert len(store.products[str(pid)]["body"]["variants"]) == 2
+    assert store.products[str(pid)]["body"]["prune_variations"] is False
+
+    # Unpublishing takes every listing off.
+    await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": True})
+    assert (await publisher().run(queued[-1])).state == "done"
+    assert store.products[f"{pid}~switch"]["status"] == "publish"
+    await client.post("/api/v1/publishing/unpublish", json={"product_ids": [str(pid)]})
+    assert (await publisher().run(queued[-1])).state == "done"
+    assert {p["status"] for p in store.products.values()} == {"draft"}
+
+
+async def test_orders_and_facts_accept_listing_ids() -> None:
+    from app.sync.facts import find_product
+
+    pid = await seed()
+    async with get_sessionmaker()() as db:
+        p = await find_product(db, f"{pid}~switch", None)
+    assert p is not None and p.id == pid
+
+
+async def test_new_option_on_live_game_is_republished(
+    client: AsyncClient, make_user: MakeUser, store: FakeStore, queued: list[uuid.UUID]
+) -> None:
+    from datetime import timedelta
+
+    from sqlalchemy import update as sa_update
+
+    from app.db.models import Storefront
+    from app.sync.service import queue_new_options
+
+    await make_user()
+    await login(client)
+    pid = await seed()
+    await connect(client, store)
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+    async with get_sessionmaker()() as db:
+        sf = (await db.execute(select(Storefront).where(Storefront.code == "omggamer-staging"))).scalar_one()
+        assert sf is not None
+        assert await queue_new_options(db, sf) == []  # everything sellable is on the store
+        # A supplier option the store does not have yet (as if it arrived after the game went live).
+        m = (await db.execute(select(StorefrontProductMapping))).scalar_one()
+        m.variant_map = dict(list(m.variant_map.items())[:1])
+        # Not re-checked within 6 hours of the last publish...
+        await db.flush()
+        assert await queue_new_options(db, sf) == []
+        await db.execute(
+            sa_update(PublishingQueueItem).values(
+                created_at=PublishingQueueItem.created_at - timedelta(hours=7)
+            )
+        )
+        ids = await queue_new_options(db, sf)
+        await db.commit()
+    assert len(ids) == 1
+    assert (await publisher().run(ids[0])).state == "done"
+    async with get_sessionmaker()() as db:
+        m = (await db.execute(select(StorefrontProductMapping))).scalar_one()
+    assert len(m.variant_map) == 2

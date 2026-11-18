@@ -8,18 +8,20 @@
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import String, cast, or_, select, update
+from sqlalchemy import String, cast, exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.services import CatalogueService
 from app.core.logging import log
 from app.db.models import (
     AppSetting,
+    Product,
     ProductVariant,
+    PublishingQueueItem,
     Storefront,
     StorefrontProductMapping,
     Supplier,
@@ -161,6 +163,19 @@ async def push_prices(
                 ).scalars()
             )
             by_variant = {v.id: v for v in variants}
+            # Which store listing has each option (games can have one listing per platform).
+            listing_of: dict[str, str] = {}
+            for m in (
+                await db.execute(
+                    select(StorefrontProductMapping).where(
+                        StorefrontProductMapping.storefront_id == sf.id,
+                        StorefrontProductMapping.product_id.in_({v.product_id for v in variants}),
+                    )
+                )
+            ).scalars():
+                ext = str(m.product_id) if not m.listing else f"{m.product_id}~{m.listing}"
+                for vid in (m.variant_map or {}).keys():
+                    listing_of[str(vid)] = ext
             todo = [
                 r
                 for r in rows
@@ -174,7 +189,9 @@ async def push_prices(
                 chunk = todo[i : i + PUSH_BATCH]
                 items = [
                     {
-                        "external_id": str(by_variant[r.variant_id].product_id),
+                        "external_id": listing_of.get(
+                            str(r.variant_id), str(by_variant[r.variant_id].product_id)
+                        ),
                         "variant_id": str(r.variant_id),
                         "regular_price": str(r.selling_price) if r.selling_price is not None else None,
                         "sale_price": str(r.sale_price) if r.sale_price is not None else None,
@@ -307,3 +324,72 @@ async def check_availability(
 
 def money(v: Decimal | None) -> str | None:
     return str(v) if v is not None else None
+
+
+async def queue_new_options(db: AsyncSession, sf: Storefront, limit: int = 50) -> list[uuid.UUID]:
+    """Re-publish live games that have a sellable option the store does not have yet.
+
+    Price sync only updates options already on the store, so a new region, edition or platform (which may need
+    its own listing) arriving from a supplier after a game went live is added by re-publishing that game. Each
+    game is re-checked at most every 6 hours; content stays as it is on the store (the connector's lock).
+    """
+    from app.db.models.jobs import ACTIVE_JOB_STATUSES
+
+    on_store = select(StorefrontProductMapping.id).where(
+        StorefrontProductMapping.storefront_id == sf.id,
+        StorefrontProductMapping.product_id == ProductVariant.product_id,
+        StorefrontProductMapping.variant_map.op("?")(cast(ProductVariant.id, String)),
+    )
+    sellable = select(VariantPrice.id).where(
+        VariantPrice.variant_id == ProductVariant.id,
+        VariantPrice.storefront_id == sf.id,
+        VariantPrice.available.is_(True),
+        VariantPrice.selling_price.is_not(None),
+    )
+    recent = select(PublishingQueueItem.id).where(
+        PublishingQueueItem.product_id == Product.id,
+        PublishingQueueItem.storefront_id == sf.id,
+        or_(
+            PublishingQueueItem.status.in_(ACTIVE_JOB_STATUSES),
+            PublishingQueueItem.created_at >= now() - timedelta(hours=6),
+        ),
+    )
+    missing = select(ProductVariant.id).where(
+        ProductVariant.product_id == Product.id, sellable.exists(), ~on_store.exists()
+    )
+    live = select(StorefrontProductMapping.id).where(
+        StorefrontProductMapping.storefront_id == sf.id,
+        StorefrontProductMapping.product_id == Product.id,
+        StorefrontProductMapping.listing == "",
+        StorefrontProductMapping.sync_status == "synced",
+    )
+    pids = list(
+        (
+            await db.execute(
+                select(Product.id)
+                .where(
+                    Product.product_status == "published",
+                    live.exists(),
+                    exists(missing),
+                    ~recent.exists(),
+                )
+                .limit(limit)
+            )
+        ).scalars()
+    )
+    ids = []
+    for pid in pids:
+        item = PublishingQueueItem(
+            product_id=pid,
+            storefront_id=sf.id,
+            action="upsert",
+            status="queued",
+            approval_status="approved",
+            approved_at=now(),
+        )
+        db.add(item)
+        await db.flush()
+        ids.append(item.id)
+    if ids:
+        log.info("new_options_republish", storefront=sf.code, products=len(ids))
+    return ids

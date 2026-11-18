@@ -100,7 +100,8 @@ async def order_webhook(code: str, request: Request, db: DB) -> dict[str, Any]:
         product_id = raw.get("product_external_id")
         try:
             vid = uuid.UUID(str(variant_id)) if variant_id else None
-            pid = uuid.UUID(str(product_id)) if product_id else None
+            # Per-platform listings are "<game id>~<platform>".
+            pid = uuid.UUID(str(product_id).split("~", 1)[0]) if product_id else None
         except ValueError:
             vid = pid = None
         if vid is None:

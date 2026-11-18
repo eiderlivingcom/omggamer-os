@@ -7,7 +7,7 @@ import uuid
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, Field
@@ -17,11 +17,20 @@ from app.catalogue.bulk import default_storefront
 from app.core.deps import DB, require
 from app.core.errors import AppError
 from app.core.security import encrypt_secret
-from app.db.models import Product, PublishingQueueItem, Storefront, StorefrontProductMapping, SyncLog, User
+from app.db.models import (
+    AppSetting,
+    Product,
+    PublishingQueueItem,
+    Storefront,
+    StorefrontProductMapping,
+    SyncLog,
+    User,
+)
 from app.db.models.jobs import ACTIVE_JOB_STATUSES
 from app.modules.audit.service import record
 from app.publishing import queue as publish_queue
 from app.publishing.connector import ConnectorClient, ConnectorError, connector_url
+from app.publishing.runner import listing_groups
 
 router = APIRouter(tags=["publishing"])
 PLUGIN_DIR = Path(__file__).resolve().parents[2] / "wp-connector" / "omggamer-catalogue-connector"
@@ -73,6 +82,15 @@ class QueueItemOut(BaseModel):
 
 class UnpublishIn(BaseModel):
     product_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    storefront: str | None = Field(default=None, max_length=40)
+
+
+class PublishingSettingsIn(BaseModel):
+    split_by_platform: Literal["off", "selected", "all"]
+
+
+class ProductSplitIn(BaseModel):
+    enabled: bool
     storefront: str | None = Field(default=None, max_length=40)
 
 
@@ -377,3 +395,127 @@ async def sync_logs(
         }
         for s, code, title in rows.tuples().all()
     ]
+
+
+# ---- One store listing per platform ----
+
+
+async def _publishing_settings(db: DB) -> AppSetting:
+    row = await db.get(AppSetting, "publishing")
+    if row is None:
+        row = AppSetting(key="publishing", value={"split_by_platform": "selected", "split_products": []})
+        db.add(row)
+        await db.flush()
+    return row
+
+
+@router.get("/publishing/settings", response_model=dict[str, Any])
+async def publishing_settings(db: DB, _: User = require("catalogue:read")) -> dict[str, Any]:
+    v = (await _publishing_settings(db)).value or {}
+    return {
+        "split_by_platform": v.get("split_by_platform", "selected"),
+        "split_products": list(v.get("split_products") or []),
+    }
+
+
+@router.put("/publishing/settings", response_model=dict[str, Any])
+async def update_publishing_settings(
+    body: PublishingSettingsIn, request: Request, db: DB, actor: User = require("settings:manage")
+) -> dict[str, Any]:
+    row = await _publishing_settings(db)
+    row.value = {**(row.value or {}), "split_by_platform": body.split_by_platform}
+    row.updated_by = actor.id
+    await record(
+        db,
+        "publishing.settings",
+        actor=actor,
+        summary=f"One listing per platform: {body.split_by_platform}",
+        request=request,
+    )
+    await db.commit()
+    return await publishing_settings(db, actor)
+
+
+@router.get("/publishing/products/{product_id}/listings", response_model=dict[str, Any])
+async def product_listings(
+    product_id: uuid.UUID, db: DB, _: User = require("catalogue:read")
+) -> dict[str, Any]:
+    product = await db.get(Product, product_id)
+    if product is None:
+        raise AppError(404, "not_found", "Product not found.")
+    v = (await _publishing_settings(db)).value or {}
+    mode = v.get("split_by_platform", "selected")
+    groups = await listing_groups(db, product)
+    maps = (
+        await db.execute(
+            select(StorefrontProductMapping).where(StorefrontProductMapping.product_id == product_id)
+        )
+    ).scalars()
+    return {
+        "mode": mode,
+        "selected": str(product_id) in set(v.get("split_products") or []),
+        "listings": [{"listing": k or "main", "platform": p} for k, p in groups],
+        "store": [
+            {
+                "listing": m.listing or "main",
+                "status": m.sync_status,
+                "wc_id": m.external_product_id,
+                "variations": len(m.variant_map or {}),
+            }
+            for m in maps
+        ],
+    }
+
+
+@router.put("/publishing/products/{product_id}/split", response_model=dict[str, Any])
+async def set_product_split(
+    product_id: uuid.UUID,
+    body: ProductSplitIn,
+    request: Request,
+    db: DB,
+    actor: User = require("publishing:manage"),
+) -> dict[str, Any]:
+    """Turn "one listing per platform" on or off for a game; a live game is re-published straight away."""
+    product = await db.get(Product, product_id)
+    if product is None:
+        raise AppError(404, "not_found", "Product not found.")
+    row = await _publishing_settings(db)
+    ids = [i for i in (row.value or {}).get("split_products") or [] if i != str(product_id)]
+    if body.enabled:
+        ids.append(str(product_id))
+    row.value = {**(row.value or {}), "split_products": ids}
+    row.updated_by = actor.id
+    queued = False
+    if product.product_status == "published":
+        sf = await default_storefront(db, body.storefront)
+        busy = await db.scalar(
+            select(PublishingQueueItem.id).where(
+                PublishingQueueItem.product_id == product_id,
+                PublishingQueueItem.storefront_id == sf.id,
+                PublishingQueueItem.status.in_(ACTIVE_JOB_STATUSES),
+            )
+        )
+        if not busy:
+            item = PublishingQueueItem(
+                product_id=product_id,
+                storefront_id=sf.id,
+                action="upsert",
+                status="queued",
+                approval_status="approved",
+                approved_by=actor.id,
+                approved_at=_now(),
+            )
+            db.add(item)
+            await db.flush()
+            queued = True
+    await record(
+        db,
+        "publishing.split",
+        actor=actor,
+        summary=f"One listing per platform {'on' if body.enabled else 'off'}: {product.canonical_title}",
+        request=request,
+    )
+    await db.commit()
+    if queued:
+        publish_queue.enqueue([item.id])
+    return {"enabled": body.enabled, "queued": queued}

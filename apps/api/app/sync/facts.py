@@ -24,7 +24,7 @@ def _activation(raw: dict[str, Any]) -> str:
 async def find_product(db: AsyncSession, product_id: str | None, title: str | None) -> Product | None:
     if product_id:
         try:
-            p = await db.get(Product, uuid.UUID(product_id))
+            p = await db.get(Product, uuid.UUID(product_id.split("~", 1)[0]))  # per-platform listing ids
         except ValueError:
             p = None
         if p is not None and p.product_status != "merged":
