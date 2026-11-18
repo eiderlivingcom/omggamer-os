@@ -253,7 +253,16 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     if (!vars || !vars.length) return;
     var sels = Array.prototype.slice.call(form.querySelectorAll('select[name^="attribute_"]'));
     var rg = sels.filter(function(x){ return /region/.test(x.name); })[0] || null;
-    var opt = sels.filter(function(x){ return x !== rg; })[0] || null;
+    var real = function(x){ return Array.prototype.filter.call(x.options, function(o){ return o.value; }); };
+    // Below the region the cards show the edition. A listing with one platform (one listing per platform) has it
+    // chosen for the visitor; the platform switcher above moves between platforms.
+    var pl = sels.filter(function(x){ return /platform/.test(x.name); })[0] || null;
+    var setNow = function(sel, v){ if (sel && sel.value !== v) { sel.value = v; if (window.jQuery) jQuery(sel).trigger('change'); else sel.dispatchEvent(new Event('change', {bubbles: true})); } };
+    if (pl && real(pl).length === 1) setNow(pl, real(pl)[0].value);
+    var edSel = sels.filter(function(x){ return /edition/.test(x.name); })[0] || null;
+    var opt = edSel
+      || sels.filter(function(x){ return x !== rg && x !== pl; })[0]
+      || (pl && real(pl).length > 1 ? pl : null);
     var set = function(sel, v){ if (sel && sel.value !== v) { sel.value = v; if (window.jQuery) jQuery(sel).trigger('change'); else sel.dispatchEvent(new Event('change', {bubbles: true})); } };
     var labelEl = document.getElementById('omg-dg-ed-label');
     if (rg && holder && !holder.querySelector('select')) {
@@ -264,7 +273,21 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
       if (!rg.value && rs.value) set(rg, rs.value);
       rs.addEventListener('change', function(){ set(rg, rs.value); price(); });
     }
-    if (!opt) return;
+    if (!opt) {
+      // No edition data from the suppliers: one Standard edition card, priced for the chosen region.
+      var sc = document.createElement('div'); sc.className = 'omg-ed-card is-active'; sc.setAttribute('aria-current', 'true');
+      sc.innerHTML = '<span class="omg-ed-name">Standard</span><span class="omg-radio"></span><span class="omg-ed-sub">Edition</span><span class="omg-ed-price"></span>';
+      wrap.appendChild(sc);
+      var stdPrice = function(){
+        var r = rg ? rg.value : '', min = null;
+        vars.forEach(function(x){ var a = x.attributes || {}; if ((!rg || !r || !a[rg.name] || a[rg.name] === r) && x.is_in_stock && x.is_purchasable !== false) min = min === null ? x.display_price : Math.min(min, x.display_price); });
+        sc.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
+      };
+      stdPrice();
+      if (rg) rg.addEventListener('change', stdPrice);
+      var hs = holder && holder.querySelector('select'); if (hs) hs.addEventListener('change', function(){ setTimeout(stdPrice, 0); });
+      return;
+    }
     var lab = form.querySelector('label[for="' + opt.id + '"]'); var attrName = lab ? lab.textContent.trim() : '';
     var title = (document.querySelector('h1') || {}).textContent || '';
     var unitM = title.match(/\d[\d,.]*\s+([A-Za-z][A-Za-z-]+)/); var unit = unitM ? unitM[1] : '';
