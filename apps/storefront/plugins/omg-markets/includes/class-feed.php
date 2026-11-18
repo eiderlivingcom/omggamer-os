@@ -241,8 +241,8 @@ final class OMG_Markets_Feed
     }
 
     /**
-     * Shopping title: name, platform, what it is, region; e.g. "Hollow Knight: Silksong – Nintendo Switch Key –
-     * Americas". Platform early because that is how people search; at most 150 characters.
+     * Shopping title, same structure as the product page: "Hollow Knight: Silksong (Americas) (Nintendo Switch) -
+     * Nintendo eShop - Digital Key" (omg-titles.php); at most 150 characters.
      */
     private static function title(WC_Product $p, ?WC_Product $parent): string
     {
@@ -266,6 +266,11 @@ final class OMG_Markets_Feed
             $region = '';
         }
         $type = (string) get_post_meta($parent ? $parent->get_id() : $p->get_id(), '_omg_product_type', true);
+        if (function_exists('omg_listing_title')) {
+            // Same structure as the product page title, without "Buy" (promotional text is not allowed in Shopping).
+            $t = omg_listing_title($name, $platform !== '' ? [$platform] : [], $region !== '' ? [$region] : [], $type ?: 'game', $edition, false);
+            return function_exists('mb_substr') ? mb_substr($t, 0, 150) : substr($t, 0, 150);
+        }
         $what = ['game_account' => 'Account', 'gift_card' => 'Gift Card', 'game_currency' => 'Top-up', 'dlc' => 'DLC Key', 'subscription' => 'Subscription', 'software' => 'Key', 'game' => 'Key'][$type] ?? 'Key';
         // A per-platform listing is already named "Game (Platform)": do not say the platform twice.
         if ($platform !== '' && stripos($name, $platform) !== false) {

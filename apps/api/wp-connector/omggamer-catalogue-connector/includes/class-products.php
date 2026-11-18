@@ -61,6 +61,10 @@ class OMG_Connector_Products
         // A product that is live on the store keeps everything the store has (title, descriptions, images, video,
         // attributes, categories, tags, SEO): OMGGamer OS only updates its prices and stock.
         if ($id && get_post_status($id) === 'publish' && self::content_locked() && empty($p['replace_content'])) {
+            // Identifiers (listing group, platform, SKU series...) are not content: keep them in step.
+            foreach ((array) ($p['meta'] ?? []) as $k => $val) {
+                update_post_meta($id, '_omg_' . sanitize_key($k), is_scalar($val) ? (string) $val : wp_json_encode($val));
+            }
             return $this->update_live_prices($id, $variants, (string) ($p['sku'] ?? ''), !empty($p['prune_variations']));
         }
         if ($id && get_post_status($id) === 'trash') {

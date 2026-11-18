@@ -53,12 +53,19 @@ async def main(action: str, titles: list[str]) -> None:
             if p is None:
                 print("not found:", t)
                 continue
-            if action in ("on", "off"):
-                ids = [i for i in ids if i != str(p.id)]
+            if action in ("on", "off", "resend"):
+                if action != "resend":
+                    ids = [i for i in ids if i != str(p.id)]
                 if action == "on":
                     ids.append(str(p.id))
                 row.value = {**(row.value or {}), "split_products": ids}
                 await db.flush()
+                for m in (
+                    await db.execute(
+                        select(StorefrontProductMapping).where(StorefrontProductMapping.product_id == p.id)
+                    )
+                ).scalars():
+                    m.last_hash = None  # send every listing again, even if nothing changed
                 if p.product_status == "published":
                     item = PublishingQueueItem(
                         product_id=p.id,

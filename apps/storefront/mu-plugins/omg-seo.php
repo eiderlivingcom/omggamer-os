@@ -257,12 +257,18 @@ final class OMG_SEO
                 $price = (float) ($p->is_type('variable') ? $p->get_variation_price('min', true) : wc_get_price_to_display($p));
                 $own_t = trim((string) get_post_meta($p->get_id(), '_omg_seo_title', true));
                 $own_d = trim((string) get_post_meta($p->get_id(), '_omg_seo_description', true));
+                // "Buy {Game} ({Region}) ({Devices}) - {Platform} - Digital Key | OMGGamer"; never a price.
+                $t_plat = wc_get_product_terms($p->get_id(), 'pa_platform', ['fields' => 'names']);
+                $t_reg = wc_get_product_terms($p->get_id(), 'pa_region', ['fields' => 'names']);
+                $t_type = (string) get_post_meta($p->get_id(), '_omg_product_type', true) ?: 'game';
+                $full = function_exists('omg_listing_title') ? omg_listing_title($name, $t_plat, $t_reg, $t_type) : 'Buy ' . $name;
+                $own_t = (string) preg_replace('/\s*[–-]\s*(Buy for\s*)?[$€£]\s?[\d.,]+/u', '', $own_t); // no prices
                 $c['title'] = $own_t ?: self::fit([
-                    $name . ($price ? ' – Buy for ' . self::money($price) : '') . ' | ' . $b,
-                    $name . ($price ? ' – ' . self::money($price) : '') . ' | ' . $b,
+                    $full . ' | ' . $b,
+                    $full,
                     $name . ' | ' . $b,
                     $name,
-                ]);
+                ], 110); // full key-store titles run past 66 characters
                 $c['desc'] = $own_d ?: sprintf(
                     'Buy %s%s%s on %s. %sInstant digital delivery, secure checkout, buyer protection and 24/7 support.',
                     $name,
