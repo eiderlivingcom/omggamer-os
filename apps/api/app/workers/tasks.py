@@ -706,3 +706,21 @@ async def _automation_tick() -> list[str]:
 @celery_app.task(name="automation.tick")  # type: ignore[misc]
 def automation_tick() -> list[str]:
     return asyncio.run(_automation_tick())
+
+
+@celery_app.task(base=ReliableTask, name="maintenance.redis")  # type: ignore[misc]
+def redis_maintenance() -> dict:  # type: ignore[type-arg]
+    """Hourly Redis clean-up so the queue never fills up again (see app.core.redis_maintenance)."""
+    from redis import Redis
+
+    from app.core.config import get_settings as app_settings
+    from app.core.redis_maintenance import auto_clean
+
+    client = Redis.from_url(app_settings().redis_url, decode_responses=True)
+    try:
+        out = auto_clean(client)
+    finally:
+        client.close()
+    if out["removed"]["ai_messages"] or out["removed"]["task_results"]:
+        log.warning("redis_maintenance", **out["removed"], used_pct=out["after"]["used_pct"])
+    return out

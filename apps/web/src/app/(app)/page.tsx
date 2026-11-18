@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Card, Empty, Notice, PageHeader, Pill, Stat, fmtDate, relTime } from "@/components/ui";
+import { Button, Card, Empty, Notice, PageHeader, Pill, Stat, fmtDate, relTime } from "@/components/ui";
+import { useSession } from "@/lib/session";
 import { api, type AuditEntry, type Health, type Summary } from "@/lib/api";
 
 const STATUS_ORDER = ["draft", "review", "approved", "published", "archived"] as const;
@@ -13,6 +14,24 @@ export default function DashboardPage() {
   const [health, setHealth] = useState<Health | null>(null);
   const [activity, setActivity] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { can } = useSession();
+  const [clearing, setClearing] = useState(false);
+  const [cleared, setCleared] = useState<string | null>(null);
+
+  async function clearQueueCache() {
+    if (!window.confirm("Clear the queue cache? Old task results and waiting AI messages are removed; AI jobs continue from the database. Imports, publishing, price sync and orders are not touched.")) return;
+    setClearing(true);
+    setCleared(null);
+    try {
+      const r = await api<{ removed: { task_results: number; ai_messages: number }; status: { used_mb: number; max_mb: number | null } }>("/system/redis/clear", { method: "POST" });
+      setCleared(`Cleared ${r.removed.ai_messages.toLocaleString()} AI queue messages and ${r.removed.task_results.toLocaleString()} old task results. Redis now uses ${r.status.used_mb} MB${r.status.max_mb ? ` of ${r.status.max_mb} MB` : ""}.`);
+      setHealth(await api<Health>("/system/health"));
+    } catch (e) {
+      setCleared(e instanceof Error ? e.message : "Could not clear the queue cache.");
+    } finally {
+      setClearing(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -110,6 +129,13 @@ export default function DashboardPage() {
               </li>
             ))}
           </ul>
+          {can("settings:manage") && (
+            <div className="mt-4 border-t border-ink-100 pt-3">
+              <Button variant="ghost" onClick={clearQueueCache} disabled={clearing}>{clearing ? "Clearing…" : "Clear queue cache"}</Button>
+              <p className="mt-1 text-xs text-ink-500">Runs automatically every hour too. Safe: AI jobs continue from the database.</p>
+              {cleared && <p className="mt-2 text-xs text-ink-700">{cleared}</p>}
+            </div>
+          )}
         </Card>
       </div>
 

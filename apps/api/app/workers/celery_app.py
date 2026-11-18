@@ -45,6 +45,8 @@ celery_app.conf.update(
         "publish-watchdog": {"task": "publish.watchdog", "schedule": 180.0},
         # Checks the configurable price/stock schedule every minute (Automation → Price synchronisation).
         "sync-tick": {"task": "sync.tick", "schedule": 60.0},
+        # Keeps Redis from filling up: drops task results, and the AI queue if Redis is over 80% full.
+        "redis-maintenance": {"task": "maintenance.redis", "schedule": 3600.0},
         "orders-watchdog": {"task": "orders.watchdog", "schedule": 300.0},
         "automation-tick": {"task": "automation.tick", "schedule": 300.0},
         # ECB publishes around 16:00 CET on working days.
