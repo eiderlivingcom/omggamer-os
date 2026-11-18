@@ -20,6 +20,7 @@ final class OMG_Blogs
         add_action('template_redirect', [__CLASS__, 'redirect_blog'], 0);
         add_action('wp_footer', [__CLASS__, 'product_posts'], 97);
         add_action('wp_footer', [__CLASS__, 'footer_link'], 98);
+        add_action('wp_body_open', [__CLASS__, 'retire_old_section'], 1);
     }
 
     private static function blog_id(): int
@@ -125,13 +126,25 @@ final class OMG_Blogs
 <script id="omg-blogs-js">
 (function(){
   var s = document.getElementById('omg-blogs'); if (!s) return;
-  // Below the products on the page (after the last section of the main content, before the footer).
+  // Under the related products (where the template's old blog row was), else at the end of the page content.
+  var slot = document.getElementById('omg-dg-related-slot');
   var main = document.getElementById('brx-content') || document.querySelector('main');
-  if (main) main.appendChild(s);
+  if (slot && slot.parentNode) slot.parentNode.insertBefore(s, slot.nextSibling); else if (main) main.appendChild(s);
   s.hidden = false;
 })();
 </script>
         <?php
+    }
+
+    /**
+     * The product template's own "From the blog" read posts from the store site (only "Hello world!"). Its script
+     * stops when an element with class omg-blog exists, so an empty one retires it; the /blogs/ section replaces it.
+     */
+    public static function retire_old_section(): void
+    {
+        if (function_exists('is_product') && is_product()) {
+            echo '<div class="omg-blog" hidden aria-hidden="true"></div>';
+        }
     }
 
     /** The footer "Blog" link goes straight to /blogs/. */
