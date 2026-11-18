@@ -417,11 +417,11 @@ async def test_provider_cooldown_pauses_the_queue_until_reset(fake: FakeOpenAI) 
     ]
     jid = await job_for(pid)
     out = await run().run(jid)
-    assert out.state == "retry_later" and out.delay > 3000
+    assert out.state == "waiting"  # stays queued in the database; nothing waits in Redis
     job = await load(AiJob, jid)
     assert job.status == "queued" and job.attempts == 0 and "quota" in (job.error_message or "")
     async with get_sessionmaker()() as db:
         assert ai_settings.cooldown_left(await ai_settings.get_settings(db)) > 7000
     sent = len(fake.requests)
     again = await run().run(jid)  # still cooling down: no request is sent
-    assert again.state == "retry_later" and len(fake.requests) == sent
+    assert again.state == "waiting" and len(fake.requests) == sent

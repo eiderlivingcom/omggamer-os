@@ -129,7 +129,12 @@ async def build_payload(db: AsyncSession, product: Product, sf: Storefront, stat
             )
         )
     )
-    if status == "publish" and not in_stock:
+    listed = await db.scalar(
+        select(StorefrontProductMapping.id).where(
+            StorefrontProductMapping.product_id == product.id, StorefrontProductMapping.storefront_id == sf.id
+        )
+    )
+    if status == "publish" and not in_stock and listed is None:
         # A game nobody can supply is never put live on the store.
         raise PublishError("This game has 0 offers in stock from any supplier, so it was not published.")
     if status == "publish" and not any(p.selling_price is not None for p in prices.values()):

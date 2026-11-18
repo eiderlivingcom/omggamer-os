@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import String, cast, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.services import CatalogueService
@@ -124,7 +124,12 @@ async def push_prices(
     mapped = select(StorefrontProductMapping.product_id).where(
         StorefrontProductMapping.storefront_id == sf.id, StorefrontProductMapping.sync_status == "synced"
     )
-    q = select(ProductVariant).where(ProductVariant.product_id.in_(mapped))
+    on_store = select(StorefrontProductMapping.id).where(
+        StorefrontProductMapping.storefront_id == sf.id,
+        StorefrontProductMapping.product_id == ProductVariant.product_id,
+        StorefrontProductMapping.variant_map.op("?")(cast(ProductVariant.id, String)),
+    )
+    q = select(ProductVariant).where(ProductVariant.product_id.in_(mapped), on_store.exists())
     if not full and since is not None:
         changed_offers = select(SupplierOffer.variant_id).where(SupplierOffer.updated_at >= since)
         never = select(VariantPrice.variant_id).where(

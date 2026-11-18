@@ -101,6 +101,8 @@ def ai_generate(job_id: str) -> str:
     outcome = asyncio.run(_run_ai(job_id))
     if outcome.state == "retry_later":
         ai_generate.apply_async((job_id,), queue="ai", countdown=outcome.delay)
+    # "waiting" (provider quota cooling down): the job stays queued in the database and the AI watchdog
+    # resumes it once the quota resets, so no message sits in Redis meanwhile.
     return str(outcome.state)
 
 
@@ -117,6 +119,9 @@ def ai_watchdog() -> int:
         )
         if paused.get("paused"):
             return 0
+        until = paused.get("cooldown_until")
+        if until and datetime.fromisoformat(str(until)) > now:
+            return 0  # the AI provider's quota is cooling down: resume after the reset
         ids = list(
             s.execute(
                 select(AiJob.id)
@@ -124,7 +129,8 @@ def ai_watchdog() -> int:
                     ((AiJob.status == "queued") & (AiJob.updated_at < now - timedelta(minutes=5)))
                     | ((AiJob.status == "running") & (AiJob.updated_at < now - timedelta(minutes=15)))
                 )
-                .limit(500)
+                .order_by(AiJob.created_at)
+                .limit(int(paused.get("concurrency") or 2) * 10)  # a few batches, not the whole backlog
             ).scalars()
         )
         if ids:

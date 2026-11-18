@@ -47,7 +47,7 @@ def now() -> datetime:
 
 @dataclass
 class AiOutcome:
-    state: str  # done | retry_later | paused | stopped | failed
+    state: str  # done | retry_later | waiting | paused | stopped | failed
     delay: float = 0.0
 
 
@@ -78,10 +78,9 @@ class AiRunner:
                     job.status = "paused"
                     await db.commit()
                     return AiOutcome("paused")
-                wait = ai_settings.cooldown_left(settings)
-                if wait > 0:
-                    # The provider's quota is used up: the job waits in the queue and runs once it resets.
-                    return AiOutcome("retry_later", delay=min(wait, 3600) + 5)
+                if ai_settings.cooldown_left(settings) > 0:
+                    # The provider's quota is used up: the job stays queued; the AI watchdog resumes it.
+                    return AiOutcome("waiting")
                 if not await self._take_slot(redis, str(job_id), int(settings["concurrency"])):
                     return AiOutcome("retry_later", delay=15)
                 try:
@@ -286,7 +285,7 @@ class AiRunner:
         job.error_message = f"Waiting for the AI provider's quota to reset: {exc}"[:4000]
         await db.commit()
         log.warning("ai_provider_cooldown", seconds=exc.seconds, error=str(exc))
-        return AiOutcome("retry_later", delay=min(exc.seconds, 3600) + 5)
+        return AiOutcome("waiting")
 
     async def _mark_credential(self, db: AsyncSession, message: str) -> None:
         await db.rollback()

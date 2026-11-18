@@ -34,7 +34,9 @@ celery_app.conf.update(
     },
     task_time_limit=60 * 30,
     task_soft_time_limit=60 * 25,
-    result_expires=60 * 60 * 24,
+    # Nothing reads task results; storing them filled Redis (1M keys). Keep none.
+    task_ignore_result=True,
+    result_expires=60 * 60,
     broker_connection_retry_on_startup=True,
     timezone="UTC",
     beat_schedule={
