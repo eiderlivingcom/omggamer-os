@@ -256,7 +256,15 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
       ed = document.createElement('div'); ed.id = 'omg-dg-ed'; ed.className = 'omg-pp-card omg-ed-built';
       ed.innerHTML = '<div id="omg-dg-ed-head"><span id="omg-dg-ed-label">Region</span><div id="omg-dg-region"></div><span id="omg-dg-ed-all">All variations</span></div><div id="omg-dg-ed-cards"></div>';
       offers.parentNode.insertBefore(ed, offers);
-      var ord = getComputedStyle(offers).order; if (ord && ord !== '0') ed.style.order = ord;
+      var oc = getComputedStyle(offers);
+      if (oc.order && oc.order !== '0') ed.style.order = oc.order;
+      // Look exactly like the offers card next to it: full width, same surface, border, corners and spacing.
+      ['backgroundColor', 'backgroundImage', 'borderTopWidth', 'borderTopStyle', 'borderTopColor', 'borderRightWidth', 'borderRightStyle', 'borderRightColor',
+       'borderBottomWidth', 'borderBottomStyle', 'borderBottomColor', 'borderLeftWidth', 'borderLeftStyle', 'borderLeftColor',
+       'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius',
+       'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'boxShadow'].forEach(function(k){ ed.style[k] = oc[k]; });
+      ed.style.width = '100%'; ed.style.maxWidth = 'none'; ed.style.alignSelf = 'stretch'; ed.style.boxSizing = 'border-box';
+      ed.style.marginTop = '0'; ed.style.marginBottom = oc.marginTop !== '0px' ? oc.marginTop : '';
       if (!document.getElementById('omg-ed-built-css')) {
         var st = document.createElement('style'); st.id = 'omg-ed-built-css';
         st.textContent = '.omg-ed-built #omg-dg-ed-head{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:18px}'
