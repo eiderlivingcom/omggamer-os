@@ -313,6 +313,27 @@ def catalogue_resort() -> dict[str, int]:
             log.warning("resort_lock_release_failed")
 
 
+async def _media_check() -> dict[str, int]:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.media.service import check_batch
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            stats = await check_batch(db, limit=300)
+            await db.commit()
+            return stats
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(base=ReliableTask, name="media.check", time_limit=900, soft_time_limit=840)  # type: ignore[misc]
+def media_check() -> dict[str, int]:
+    """Check the next batch of product images (live games first)."""
+    return asyncio.run(_media_check())
+
+
 async def _matching_scan(restart: bool = False) -> dict[str, Any]:
     from sqlalchemy.ext.asyncio import async_sessionmaker
 

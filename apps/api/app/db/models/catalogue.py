@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -292,6 +293,14 @@ class ProductMedia(UUIDPk, Timestamps, Base):
     media_type: Mapped[str] = mapped_column(String(20), nullable=False, default="screenshot")
     processing_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Image check (app.media): what the file really is. Hidden images are never sent to a storefront.
+    content_type: Mapped[str | None] = mapped_column(String(60))
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    bytes: Mapped[int | None] = mapped_column(Integer)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    error: Mapped[str | None] = mapped_column(String(300))
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class Storefront(UUIDPk, Timestamps, Base):

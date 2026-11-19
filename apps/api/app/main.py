@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging, log
 from app.imports.router import router as imports_router
+from app.media.router import router as media_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.dashboard.router import router as dashboard_router
@@ -102,6 +103,7 @@ def create_app() -> FastAPI:
         ai_router,
         pricing_router,
         publishing_router,
+        media_router,
         sync_router,
         orders_router,
         analytics_router,

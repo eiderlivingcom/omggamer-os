@@ -364,6 +364,8 @@ async def build_payload(
                 .where(
                     ProductMedia.product_id == product.id,
                     ProductMedia.media_type.in_(("cover", "screenshot")),
+                    ProductMedia.hidden.is_(False),
+                    ProductMedia.processing_status != "failed",
                 )
                 .order_by(ProductMedia.media_type != "cover", ProductMedia.position)
                 .limit(8)

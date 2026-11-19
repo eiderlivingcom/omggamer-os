@@ -47,6 +47,8 @@ celery_app.conf.update(
         "sync-tick": {"task": "sync.tick", "schedule": 60.0},
         # Keeps Redis from filling up: drops task results, and the AI queue if Redis is over 80% full.
         "redis-maintenance": {"task": "maintenance.redis", "schedule": 3600.0},
+        # Image checks: 300 images every 10 minutes, live games first (Media page).
+        "media-check": {"task": "media.check", "schedule": 600.0},
         "orders-watchdog": {"task": "orders.watchdog", "schedule": 300.0},
         "automation-tick": {"task": "automation.tick", "schedule": 300.0},
         # ECB publishes around 16:00 CET on working days.
