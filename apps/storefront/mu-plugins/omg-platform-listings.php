@@ -89,11 +89,11 @@ final class OMG_Platform_Listings
 .omg-av-x{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;border:1px solid transparent;background:transparent;color:#f4f2fb;cursor:pointer}
 .omg-av-x:hover,.omg-av-x:focus-visible{border-color:#8b5cf6;outline:none}
 .omg-av-filters{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px 8px}
-.omg-av-chips{display:flex;flex-wrap:wrap;gap:8px}
+.omg-av-chips{display:flex;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
 .omg-av-chip{min-height:40px;padding:8px 16px;border-radius:12px;border:1px solid #2a2540;background:#1e1a2e;color:#d9d4ea;font:600 14px/1 Poppins,sans-serif;cursor:pointer}
 .omg-av-chip.is-on{background:#f4f2fb;color:#0d0619;border-color:#f4f2fb}
 .omg-av-chip:focus-visible{outline:2px solid #c4b5fd;outline-offset:2px}
-.omg-av-region select{min-height:40px;padding:0 36px 0 14px;border-radius:12px;border:1px solid #2a2540;background:#1e1a2e;color:#f4f2fb;font:600 14px/1 Poppins,sans-serif}
+.omg-av-region select{box-sizing:border-box;max-width:100%;min-height:40px;padding:0 36px 0 14px;border-radius:12px;border:1px solid #2a2540;background:#1e1a2e;color:#f4f2fb;font:600 14px/1 Poppins,sans-serif}
 .omg-av .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .omg-av-list{list-style:none;margin:0;padding:4px 24px 20px;overflow:auto}
 .omg-av-row{display:grid;grid-template-columns:72px 1fr auto auto;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid #2a2540}
@@ -218,7 +218,7 @@ final class OMG_Platform_Listings
                 'id' => $s['id'], 'url' => $s['url'], 'platform' => $s['platform'], 'edition' => $s['edition'],
                 'region' => $region, 'type' => $s['type'], 'price' => $s['price'], 'in_stock' => $s['in_stock'],
                 'title' => html_entity_decode($title, ENT_QUOTES), 'image' => (string) $img,
-                'price_html' => $s['price'] > 0 ? wp_strip_all_tags(wc_price($s['price'])) : '',
+                'price_html' => $s['price'] > 0 ? html_entity_decode(wp_strip_all_tags(wc_price($s['price'])), ENT_QUOTES, 'UTF-8') : '',
             ];
         }, $all);
         echo '<script id="omg-listings-data">window.OMG_LISTINGS=' . wp_json_encode(['current' => $current, 'items' => $data]) . ';</script>';
