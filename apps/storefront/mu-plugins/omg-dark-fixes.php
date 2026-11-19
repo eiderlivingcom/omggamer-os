@@ -277,7 +277,11 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
       }
     }
     var wrap = document.getElementById('omg-dg-ed-cards'), holder = document.getElementById('omg-dg-region');
-    if (!wrap || wrap.querySelector('.omg-ed-card')) return;
+    if (!wrap || wrap.getAttribute('data-omg-linked')) return;
+    // Products with options get cards and a region list from the template's own script: replace them with links.
+    wrap.setAttribute('data-omg-linked', '1');
+    wrap.innerHTML = '';
+    if (holder) { holder.innerHTML = ''; delete holder.dataset.omgDd; holder.classList.remove('omg-dd-on'); }
     var cur = L.items.filter(function(x){ return x.id === L.current; })[0]; if (!cur) return;
     ed.classList.remove('omg-needs-js');
     var all = document.getElementById('omg-dg-ed-all');
