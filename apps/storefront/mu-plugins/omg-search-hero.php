@@ -69,6 +69,12 @@ final class OMG_Search_Hero
         $css = '<style id="omg-search-hero">.omg-ar-title{word-break:break-word}'
             . '.omg-search-clear{margin-left:8px;color:#c4b5fd;font-weight:600;text-decoration:underline;text-underline-offset:3px}'
             . '.omg-search-clear:hover{color:#fff}</style>';
+        // A page script relabels the kicker after load: keep "Search results".
+        $js = '<script id="omg-search-kicker">(function(){var k=document.querySelector(".omg-ar-kicker");if(!k)return;'
+            . 'var fix=function(){if(k.textContent!=="Search results")k.textContent="Search results";};fix();'
+            . 'if(window.MutationObserver){var o=new MutationObserver(fix);o.observe(k,{childList:true,characterData:true,subtree:true});setTimeout(function(){o.disconnect();},8000);}'
+            . 'document.addEventListener("DOMContentLoaded",fix);window.addEventListener("load",fix);})();</script>';
+        $html = (string) preg_replace('#</body>#', $js . '</body>', $html, 1);
         return (string) preg_replace('#</head>#', $css . '</head>', $html, 1);
     }
 }
