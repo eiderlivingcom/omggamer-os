@@ -182,18 +182,46 @@ async def listing_groups(db: AsyncSession, product: Product) -> list[tuple[str, 
         k = g.key()
         region_pref = 0 if g.region == "Global" else 1 if g.region == "Europe" else 2
         std = 0 if not g.edition else 1
-        return (std, 0 if g.type == "key" else 1, region_pref, -offers.get(k, 0), g.region)
+        # In stock first: a new game's main page must be one it can sell, or nothing would go live.
+        return (
+            0 if offers.get(k, 0) else 1,
+            std,
+            0 if g.type == "key" else 1,
+            region_pref,
+            -offers.get(k, 0),
+            g.region,
+        )
 
     by_platform: dict[str, list[Group]] = {}
     for g in groups.values():
         by_platform.setdefault(g.platform, []).append(g)
     for gs in by_platform.values():
         gs.sort(key=primary_rank)
-    platforms = list(by_platform)
-    main = (
-        next((p for p in MAIN_PLATFORMS if p in by_platform), None)
-        or sorted(platforms, key=lambda p: (-len(by_platform[p]), p))[0]
+    # A live game keeps what its original page already sells (stock coming and going never swaps it).
+    current = (
+        await db.execute(
+            select(StorefrontProductMapping.variant_map).where(
+                StorefrontProductMapping.product_id == product.id,
+                StorefrontProductMapping.listing == "",
+                StorefrontProductMapping.sync_status == "synced",
+            )
+        )
+    ).scalars().first() or {}
+    sticky = next(
+        (variant_group_key(v) for v in variants if str(v.id) in current and variant_group_key(v) in groups),
+        None,
     )
+    platforms = list(by_platform)
+    stocked = [p for p in platforms if any(offers.get(g.key(), 0) for g in by_platform[p])] or platforms
+    main = (
+        next((p for p in MAIN_PLATFORMS if p in stocked), None)
+        or sorted(stocked, key=lambda p: (-len(by_platform[p]), p))[0]
+    )
+    if sticky is not None and len(current) == 1:
+        g0 = groups[sticky]
+        main = g0.platform
+        by_platform[main].remove(g0)
+        by_platform[main].insert(0, g0)
     out: list[tuple[str, Group | None]] = [("", by_platform[main][0])]
     out += [(slugify(p)[:60], by_platform[p][0]) for p in sorted(platforms) if p != main]
     taken = {k for k, _ in out}

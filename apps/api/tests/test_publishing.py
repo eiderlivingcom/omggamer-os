@@ -546,3 +546,59 @@ async def test_separate_listing_per_platform_edition_region_and_type(
     assert ext["steam-global-gift"]["meta"]["listing_type"] == "Gift"
     assert ext["steam-global-gift"]["name"].endswith("(Global) (Steam) Gift")
     assert len({b["meta"]["listing_group"] for b in ext.values()}) == 1
+
+
+async def test_new_game_main_page_is_an_option_in_stock(
+    client: AsyncClient, make_user: MakeUser, store: FakeStore, queued: list[uuid.UUID]
+) -> None:
+    """Steam Global has no stock, Steam Europe has: the game still goes live, Europe on the original page."""
+    await make_user()
+    await login(client)
+    pid = await seed()
+    async with get_sessionmaker()() as db:
+        k = (await db.execute(select(Supplier).where(Supplier.code == "kinguin"))).scalar_one()
+        await CatalogueService(db).ingest(
+            k,
+            NormalizedProduct(
+                external_product_id="13",
+                original_title="Hades EU PC Steam CD Key",
+                base_title="Hades",
+                platform="Steam",
+                region="Europe",
+                offers=[
+                    NormalizedOffer(external_offer_id="o13", currency="EUR", price=Decimal("9"), quantity=3)
+                ],
+            ),
+        )
+        # Steam Global (seeded) sells out.
+        from app.db.models import SupplierOffer
+
+        o = (
+            await db.execute(select(SupplierOffer).where(SupplierOffer.external_offer_id == "o7"))
+        ).scalar_one()
+        o.available_quantity = 0
+        o.availability_status = "out_of_stock"
+        await db.commit()
+    await connect(client, store)
+    await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": True})
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+    main = store.products[str(pid)]["body"]
+    assert main["slug"] == "hades" and main["meta"]["listing_region"] == "Europe"
+
+    # Back in stock: the original page keeps Europe; Global gets its own page.
+    async with get_sessionmaker()() as db:
+        o = (
+            await db.execute(select(SupplierOffer).where(SupplierOffer.external_offer_id == "o7"))
+        ).scalar_one()
+        o.available_quantity = 3
+        o.availability_status = "in_stock"
+        await db.commit()
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+    assert store.products[str(pid)]["body"]["meta"]["listing_region"] == "Europe"
+    assert f"{pid}~steam-global" in store.products
