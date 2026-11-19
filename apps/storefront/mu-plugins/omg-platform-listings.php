@@ -72,7 +72,7 @@ final class OMG_Platform_Listings
         $region = count($regions) === 1 ? $regions[0] : (count($regions) > 1 ? count($regions) . ' regions' : '');
         $name = trim((string) preg_replace('/\s*\(' . preg_quote($s['platform'], '/') . '\)\s*$/i', '', html_entity_decode($p->get_name(), ENT_QUOTES)));
         ob_start(); ?>
-<div class="omg-ac"><a class="omg-ac-card" href="<?php echo esc_url($s['url']); ?>"><div class="omg-ac-cover"><img class="omg-ac-img" src="<?php echo esc_url((string) $src); ?>"<?php if ($srcset) : ?> srcset="<?php echo esc_attr($srcset); ?>" sizes="(max-width: 767px) 50vw, 25vw"<?php endif; ?> alt="<?php echo esc_attr($name . ' ' . $s['platform'] . ' cover'); ?>" loading="lazy"></div><div class="omg-ac-body"><h3 class="omg-ac-title"><?php echo esc_html($name); ?></h3><div class="omg-ac-meta"><span class="omg-ac-platform"><?php echo esc_html($s['platform']); ?></span><?php if ($region) : ?><span class="omg-ac-region"><?php echo esc_html($region); ?></span><?php endif; ?></div><?php if ($min > 0) : ?><span class="omg-ac-from">from</span><div class="omg-ac-pricerow"><div class="omg-ac-price"><p class="price"><?php echo wp_kses_post(wc_price($min)); ?></p></div></div><?php endif; ?></div></a><a class="omg-pf" href="<?php echo esc_url(home_url('/platform/' . sanitize_title($s['platform']) . '/')); ?>" data-pf="<?php echo esc_attr(sanitize_title($s['platform'])); ?>" title="<?php echo esc_attr($s['platform']); ?>" aria-label="<?php echo esc_attr('Shop ' . $s['platform']); ?>"><span><?php echo esc_html($s['platform']); ?></span></a></div>
+<div class="omg-ac"><a class="omg-ac-card" href="<?php echo esc_url($s['url']); ?>"><div class="omg-ac-cover"><img class="omg-ac-img" src="<?php echo esc_url((string) $src); ?>"<?php if ($srcset) : ?> srcset="<?php echo esc_attr($srcset); ?>" sizes="(max-width: 767px) 50vw, 25vw"<?php endif; ?> alt="<?php echo esc_attr($name . ' ' . $s['platform'] . ' cover'); ?>" loading="lazy"></div><div class="omg-ac-body"><h3 class="omg-ac-title"><?php echo esc_html($name); ?></h3><div class="omg-ac-meta"><span class="omg-ac-region"><?php echo esc_html($s['platform'] . ($region ? ' · ' . $region : '')); ?></span></div><?php if ($min > 0) : ?><span class="omg-ac-from">from</span><div class="omg-ac-pricerow"><div class="omg-ac-price"><p class="price"><?php echo wp_kses_post(wc_price($min)); ?></p></div></div><?php endif; ?></div></a><a class="omg-pf" href="<?php echo esc_url(home_url('/platform/' . sanitize_title($s['platform']) . '/')); ?>" data-pf="<?php echo esc_attr(sanitize_title($s['platform'])); ?>" title="<?php echo esc_attr($s['platform']); ?>" aria-label="<?php echo esc_attr('Shop ' . $s['platform']); ?>"><span><?php echo esc_html($s['platform']); ?></span></a></div>
         <?php
         return (string) ob_get_clean();
     }
@@ -105,7 +105,6 @@ final class OMG_Platform_Listings
 #omg-pl .omg-pl-head h2{margin:0}
 #omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 60px) / 4)}
 #omg-pl .omg-ac-meta{display:flex;flex-wrap:wrap;gap:6px}
-#omg-pl .omg-ac-platform{font-weight:600}
 @media (max-width:1000px){#omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 20px) / 2.2)}}
 @media (max-width:560px){#omg-pl .omg-pl-track{grid-auto-columns:72%}}
 </style>
