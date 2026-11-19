@@ -11,7 +11,7 @@ from app.media import staging
 
 
 async def main(url: str, name: str, wait: int) -> None:
-    pid = uuid.uuid4()
+    pid = uuid.UUID("00000000-0000-4000-8000-000000000a75") if not sys.argv[1:] else uuid.uuid4()
     out = await staging.stage_images(pid, [{"url": url, "filename": name}])
     print("staged:", out[0]["url"])
     await asyncio.sleep(wait)
