@@ -34,6 +34,7 @@ async def main(code: str) -> None:
                 )
             )
             .scalars()
+            .unique()
             .all()
         )
         busy = set(
@@ -47,7 +48,7 @@ async def main(code: str) -> None:
             ).scalars()
         )
         items = []
-        for pid in rows:
+        for pid in dict.fromkeys(rows):  # one job per game, however many listings it has
             if pid in busy:
                 continue
             item = PublishingQueueItem(
