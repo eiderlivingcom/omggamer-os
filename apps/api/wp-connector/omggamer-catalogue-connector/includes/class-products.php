@@ -270,11 +270,20 @@ class OMG_Connector_Products
         if ($variable && $prune) {
             $keep = array_map('intval', array_values($map));
             // Every variation, private ones included (get_children() lists only visible ones).
-            $all = get_posts(['post_type' => 'product_variation', 'post_parent' => $product_id, 'post_status' => ['publish', 'private', 'draft', 'pending'], 'numberposts' => -1, 'fields' => 'ids']);
+            $all = get_posts(['post_type' => 'product_variation', 'post_parent' => $product_id, 'post_status' => ['publish', 'private', 'draft', 'pending', 'trash'], 'numberposts' => -1, 'fields' => 'ids']);
             foreach ($all as $child_id) {
-                if (!in_array((int) $child_id, $keep, true) && get_post_meta($child_id, '_omg_variant_id', true) !== '') {
-                    // Trash, not private: WooCommerce still lists private variations' options in the dropdowns.
-                    // Trashed variations stay in the database (orders keep their link) and come back on fold-back.
+                if (in_array((int) $child_id, $keep, true) || get_post_meta($child_id, '_omg_variant_id', true) === '') {
+                    continue;
+                }
+                // The option may now be its own listing: free its SKU (WooCommerce keeps trashed SKUs taken).
+                $child = wc_get_product($child_id);
+                if ($child && $child->get_sku() !== '') {
+                    $child->set_sku('');
+                    $child->save();
+                }
+                // Trash, not private: WooCommerce still lists private variations' options in the dropdowns.
+                // Trashed variations stay in the database (orders keep their link) and come back on fold-back.
+                if (get_post_status($child_id) !== 'trash') {
                     wp_trash_post($child_id);
                 }
             }
