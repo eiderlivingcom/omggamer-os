@@ -252,7 +252,8 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     if (!ed || !wrap || wrap.querySelector('.omg-ed-card')) return;
     var cur = L.items.filter(function(x){ return x.id === L.current; })[0]; if (!cur) return;
     ed.classList.remove('omg-needs-js');
-    var all = document.getElementById('omg-dg-ed-all'); if (all) all.hidden = true;
+    var all = document.getElementById('omg-dg-ed-all');
+    if (all) { all.hidden = false; all.textContent = 'All variations (' + L.items.length + ')'; all.setAttribute('role', 'button'); all.tabIndex = 0; }
     var labelEl = document.getElementById('omg-dg-ed-label'); if (labelEl) labelEl.textContent = 'Region';
     var mine = L.items.filter(function(x){ return x.platform === cur.platform; });
     var uniq = function(list, k){ var seen = {}, out = []; list.forEach(function(x){ if (!seen[x[k]]) { seen[x[k]] = 1; out.push(x[k]); } }); return out; };
