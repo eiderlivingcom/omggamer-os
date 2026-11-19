@@ -283,7 +283,8 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     var all = document.getElementById('omg-dg-ed-all');
     if (all) { all.hidden = false; all.textContent = 'All variations (' + L.items.length + ')'; all.setAttribute('role', 'button'); all.tabIndex = 0; }
     var labelEl = document.getElementById('omg-dg-ed-label'); if (labelEl) labelEl.textContent = 'Region';
-    var mine = L.items.filter(function(x){ return x.platform === cur.platform; });
+    // This platform's products of the same delivery type (a Key page never offers Gift products and vice versa).
+    var mine = L.items.filter(function(x){ return x.platform === cur.platform && x.type === cur.type; });
     var uniq = function(list, k){ var seen = {}, out = []; list.forEach(function(x){ if (!seen[x[k]]) { seen[x[k]] = 1; out.push(x[k]); } }); return out; };
     // The closest product for a choice: same choice, then same region, edition and type as this page, then cheapest.
     var best = function(list, want){
@@ -322,7 +323,7 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     };
     // One product is one thing: editions of this delivery type only. Gift links / keys are other products
     // (All variations), never mixed into this page.
-    row('edition', 'Edition', uniq(mine.filter(function(x){ return x.type === cur.type; }), 'edition'));
+    row('edition', 'Edition', uniq(mine, 'edition'));
     if (cur.type && cur.type !== 'Key') {
       // The template describes every game as a digital key: say what this product really is.
       var what = cur.type === 'Gift' ? cur.platform + ' gift' : cur.platform + ' ' + cur.type.toLowerCase();
@@ -476,6 +477,9 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
       });
     });
     var vis = document.querySelector('#omg-dg-region select');
+    // Separate listings: the visible region dropdown lists other products, not this product's options.
+    var linked = !!(window.OMG_LISTINGS && window.OMG_LISTINGS.items && window.OMG_LISTINGS.items.length > 1);
+    if (linked) vis = null;
     if (vis && regionSel) {
       Array.prototype.slice.call(vis.options).forEach(function(o){ if (o.value && !has(regionSel.name, o.value)) o.remove(); });
     }
