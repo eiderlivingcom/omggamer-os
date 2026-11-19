@@ -320,8 +320,16 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
         wrap.appendChild(a);
       });
     };
-    row('edition', 'Edition', uniq(mine.filter(function(x){ return x.type === cur.type; }).concat(mine), 'edition'));
-    var types = uniq(mine, 'type'); if (types.length > 1) row('type', 'Type', types);
+    // One product is one thing: editions of this delivery type only. Gift links / keys are other products
+    // (All variations), never mixed into this page.
+    row('edition', 'Edition', uniq(mine.filter(function(x){ return x.type === cur.type; }), 'edition'));
+    if (cur.type && cur.type !== 'Key') {
+      // The template describes every game as a digital key: say what this product really is.
+      var what = cur.type === 'Gift' ? cur.platform + ' gift' : cur.platform + ' ' + cur.type.toLowerCase();
+      var tv = document.querySelector('#omg-dg-spec-type .omg-dg-spec-v'); if (tv) tv.textContent = what;
+      var nt = document.getElementById('omg-dg-note-text');
+      if (nt && cur.type === 'Gift') nt.innerHTML = 'This is a <strong>' + cur.platform + ' gift</strong>, not a key. You receive a gift link by email and in your dashboard; open it while signed in to your ' + cur.platform + ' account to add the game to your library. Check the region above before you buy.';
+    }
   }
   function optionCards(){
     if (window.OMG_LISTINGS && window.OMG_LISTINGS.items && window.OMG_LISTINGS.items.length > 1) { linkedCards(window.OMG_LISTINGS); return; }

@@ -314,7 +314,21 @@ class OMG_Connector_Products
     {
         $attrs = $parent->get_attributes();
         $pos = count($attrs);
-        foreach ($this->dimensions($variants) as $name => $values) {
+        $dims = $this->dimensions($variants);
+        if ($prune) {
+            // Option lists the OS no longer sends (e.g. "Type: Key / Gift" once Gift is its own product) go.
+            $keep = [];
+            foreach (array_keys($dims) as $name) {
+                $keep[] = sanitize_title($name);
+                $keep[] = wc_attribute_taxonomy_name(sanitize_title($name));
+            }
+            foreach ($attrs as $key => $attr) {
+                if ($attr->get_variation() && !in_array($key, $keep, true) && !in_array(sanitize_title($attr->get_name()), $keep, true)) {
+                    unset($attrs[$key]);
+                }
+            }
+        }
+        foreach ($dims as $name => $values) {
             $obj = $this->attribute_object($name, $values, $pos, true);
             $key = sanitize_title($obj->get_name());
             if (isset($attrs[$key])) {
