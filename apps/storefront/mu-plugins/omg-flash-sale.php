@@ -75,6 +75,14 @@ final class OMG_Flash
         if (!self::active()) {
             return self::$ids = [];
         }
+        // Flash deals chosen in OMGGamer OS (Storefront page) replace the rotating set.
+        $chosen = function_exists('omg_home_section') ? omg_home_section('flash') : [];
+        if ($chosen) {
+            return self::$ids = array_values(array_filter($chosen, static function ($id) {
+                $p = wc_get_product($id);
+                return $p && self::flashable($p);
+            }));
+        }
         $w = self::window();
         $cache = 'omg_flash_' . $w['idx'] . '_' . md5(wp_json_encode(self::settings()));
         $ids = get_transient($cache);

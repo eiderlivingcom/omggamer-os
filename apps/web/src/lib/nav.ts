@@ -107,6 +107,16 @@ export const NAV: NavItem[] = [
     ],
   },
   {
+    href: "/storefront",
+    label: "Storefront",
+    icon: "home",
+    perm: "catalogue:read",
+    sections: [
+      { label: "Home page sections", phase: 7 },
+      { label: "Banners", phase: 7 },
+    ],
+  },
+  {
     href: "/orders",
     label: "Orders",
     icon: "receipt",

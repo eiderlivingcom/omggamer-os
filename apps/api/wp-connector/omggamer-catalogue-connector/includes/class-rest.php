@@ -34,6 +34,9 @@ class OMG_Connector_REST
         register_rest_route(OMG_CONNECTOR_NS, '/orders/note', [
             'methods' => 'POST', 'callback' => [__CLASS__, 'note'], 'permission_callback' => $auth,
         ]);
+        register_rest_route(OMG_CONNECTOR_NS, '/storefront/content', [
+            'methods' => 'POST', 'callback' => [__CLASS__, 'storefront_content'], 'permission_callback' => $auth,
+        ]);
         register_rest_route(OMG_CONNECTOR_NS, '/products/(?P<external_id>[A-Za-z0-9-]{1,80})', [
             'methods' => 'GET', 'callback' => [__CLASS__, 'lookup'], 'permission_callback' => $auth,
         ]);
@@ -117,6 +120,56 @@ class OMG_Connector_REST
         return self::run($request, $ext, function () use ($data, $ext) {
             return (new OMG_Connector_Products())->set_status($ext, (string) ($data['status'] ?? ''));
         });
+    }
+
+    /**
+     * Home page content chosen in OMGGamer OS: products per section (WooCommerce IDs, in order) and hero banners.
+     * Stored in the option omg_storefront_content; the theme reads it (mu-plugin omg-home-content).
+     */
+    public static function storefront_content(WP_REST_Request $request)
+    {
+        $data = self::body($request);
+        if ($data === null || !isset($data['sections']) || !is_array($data['sections'])) {
+            return new WP_Error('omg_invalid', 'sections is required.', ['status' => 400]);
+        }
+        $sections = [];
+        foreach ($data['sections'] as $key => $ids) {
+            $key = sanitize_key((string) $key);
+            if ($key === '' || !is_array($ids)) {
+                continue;
+            }
+            $clean = [];
+            foreach (array_slice($ids, 0, 48) as $id) {
+                $id = (int) $id;
+                if ($id > 0 && get_post_type($id) === 'product' && get_post_status($id) === 'publish') {
+                    $clean[] = $id;
+                }
+            }
+            $sections[$key] = array_values(array_unique($clean));
+        }
+        $banners = [];
+        foreach (array_slice((array) ($data['banners'] ?? []), 0, 12) as $b) {
+            if (!is_array($b) || trim((string) ($b['title'] ?? '')) === '') {
+                continue;
+            }
+            $banners[] = [
+                'title' => sanitize_text_field((string) $b['title']),
+                'highlight' => sanitize_text_field((string) ($b['highlight'] ?? '')),
+                'subtitle' => sanitize_text_field((string) ($b['subtitle'] ?? '')),
+                'tags' => array_slice(array_values(array_filter(array_map('sanitize_text_field', (array) ($b['tags'] ?? [])))), 0, 3),
+                'button' => sanitize_text_field((string) ($b['button'] ?? '')) ?: 'Shop now',
+                'url' => esc_url_raw((string) ($b['url'] ?? '')),
+                'image' => esc_url_raw((string) ($b['image'] ?? '')),
+                'image_mobile' => esc_url_raw((string) ($b['image_mobile'] ?? '')),
+                'starts_at' => sanitize_text_field((string) ($b['starts_at'] ?? '')),
+                'ends_at' => sanitize_text_field((string) ($b['ends_at'] ?? '')),
+            ];
+        }
+        update_option('omg_storefront_content', ['sections' => $sections, 'banners' => $banners, 'updated_at' => gmdate('c')], false);
+        if (function_exists('wp_cache_flush_group')) {
+            wp_cache_flush_group('omg_home');
+        }
+        return rest_ensure_response(['ok' => true, 'sections' => array_map('count', $sections), 'banners' => count($banners)]);
     }
 
     public static function prices(WP_REST_Request $request)

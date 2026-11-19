@@ -92,6 +92,9 @@ class FakeStore:
                 "ok": True,
                 "results": [{"variant_id": i["variant_id"], "ok": True} for i in body["items"]],
             }
+        elif path == "/storefront/content":
+            self.home_content = body
+            res = {"ok": True, "sections": {k: len(v) for k, v in body["sections"].items()}}
         elif path == "/products/status":
             self.products[body["external_id"]]["status"] = body["status"]
             res = {"ok": True, "status": body["status"]}
