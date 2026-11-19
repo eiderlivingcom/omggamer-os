@@ -286,9 +286,18 @@ final class OMG_Platform_Listings
       track.scrollBy({ left: step * Number(b.getAttribute('data-dir')), behavior: 'smooth' });
     });
   });
+  // Same card size as "Related games" (copied from its slider, which sizes cards for the current screen).
+  function sync() {
+    var rc = document.querySelector('#omg-dg-related-slot .omg-ac');
+    var w = rc ? rc.getBoundingClientRect().width : 0;
+    if (w > 80) track.style.setProperty('grid-auto-columns', Math.round(w) + 'px', 'important');
+    update();
+  }
   track.addEventListener('scroll', function () { window.requestAnimationFrame(update); }, { passive: true });
-  window.addEventListener('resize', update);
-  update();
+  window.addEventListener('resize', sync);
+  window.addEventListener('load', sync);
+  setTimeout(sync, 1200);
+  sync();
 })();
 </script>
         <?php
