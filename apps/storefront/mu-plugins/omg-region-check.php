@@ -49,6 +49,36 @@ final class OMG_Region_Check
         if (strpos($slug, 'europe') !== false || $slug === 'eu') {
             return self::EUROPE;
         }
+        // Broad regions.
+        $broad = [
+            'north-america' => ['US', 'CA', 'MX'],
+            'americas' => ['US', 'CA', 'MX', 'BR', 'AR', 'CL', 'CO', 'PE', 'EC', 'UY', 'PY', 'BO', 'VE', 'CR', 'PA', 'GT', 'HN', 'SV', 'NI', 'DO', 'PR', 'JM', 'TT'],
+            'latin-america' => ['MX', 'BR', 'AR', 'CL', 'CO', 'PE', 'EC', 'UY', 'PY', 'BO', 'VE', 'CR', 'PA', 'GT', 'HN', 'SV', 'NI', 'DO', 'PR'],
+            'australia-oceania' => ['AU', 'NZ', 'FJ', 'PG'],
+            'oceania' => ['AU', 'NZ', 'FJ', 'PG'],
+            'africa' => ['ZA', 'NG', 'EG', 'KE', 'MA', 'GH', 'TN', 'DZ', 'ET', 'UG', 'TZ', 'CI', 'SN', 'CM'],
+            'asia' => ['IN', 'JP', 'KR', 'CN', 'HK', 'TW', 'SG', 'MY', 'TH', 'ID', 'PH', 'VN', 'PK', 'BD', 'KZ'],
+            'south-east-asia' => ['SG', 'MY', 'TH', 'ID', 'PH', 'VN'],
+        ];
+        if (isset($broad[$slug])) {
+            return $broad[$slug];
+        }
+        // One country (keys sorted to the country they work in: "united-states", "united-kingdom", "poland"...).
+        if (function_exists('WC') && WC()->countries) {
+            static $by_slug = null;
+            if ($by_slug === null) {
+                $by_slug = [];
+                foreach (WC()->countries->get_countries() as $code => $name) {
+                    $plain = trim((string) preg_replace('/\s*\(.*?\)\s*/', ' ', html_entity_decode($name)));
+                    $by_slug[sanitize_title($plain)] = $code;
+                }
+                $by_slug['uk'] = 'GB';
+                $by_slug['usa'] = 'US';
+            }
+            if (isset($by_slug[$slug])) {
+                return [$by_slug[$slug]];
+            }
+        }
         return [];
     }
 
