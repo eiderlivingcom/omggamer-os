@@ -319,7 +319,7 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
         var a = document.createElement(on ? 'div' : 'a'); a.className = 'omg-ed-card' + (on ? ' is-active' : '');
         if (!on) a.href = target.url; else a.setAttribute('aria-current', 'true');
         a.innerHTML = '<span class="omg-ed-name"></span><span class="omg-radio"></span><span class="omg-ed-sub"></span><span class="omg-ed-price"></span>';
-        a.querySelector('.omg-ed-name').textContent = v;
+        a.querySelector('.omg-ed-name').textContent = key === 'edition' ? String(v).replace(/\s+edition$/i, '') : v;
         a.querySelector('.omg-ed-sub').textContent = label + (!on && target.region !== cur.region ? ' · ' + target.region : '');
         a.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
         wrap.appendChild(a);
