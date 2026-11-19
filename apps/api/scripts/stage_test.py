@@ -19,4 +19,9 @@ async def main(url: str, name: str, wait: int) -> None:
     print("deleted:", not staging.product_dir(pid).exists())
 
 
-asyncio.run(main(sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 60))
+ATS = (
+    "https://static.kinguin.net/media/catalog/category/cache/1/thumbnail/9df78eab33525d08d6e5fb8d27136e95/"
+    "ats_logo_2_1_1.png"
+)
+args = sys.argv[1:] or [ATS, "american-truck-simulator-2026-pc-steam-key-cover.png", "90"]
+asyncio.run(main(args[0], args[1], int(args[2]) if len(args) > 2 else 60))
