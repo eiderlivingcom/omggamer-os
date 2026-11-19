@@ -97,6 +97,28 @@ class OMG_Connector_Products
         if (array_key_exists('short_description', $p)) {
             $product->set_short_description(wp_kses_post((string) $p['short_description']));
         }
+        // A new listing of a game that already has a store page (separate listings per platform / edition /
+        // region / type): start from the main page's texts when OMGGamer OS sends none.
+        $group = (string) ($p['meta']['listing_group'] ?? '');
+        if ($created && $group !== '' && $group !== $external_id) {
+            $main = self::find_by_external($group);
+            $source = $main ? wc_get_product($main) : null;
+            if ($source) {
+                if (trim((string) ($p['description'] ?? '')) === '') {
+                    $product->set_description($source->get_description());
+                }
+                if (trim((string) ($p['short_description'] ?? '')) === '') {
+                    $product->set_short_description($source->get_short_description());
+                }
+                if (empty($p['categories'])) {
+                    $product->set_category_ids($source->get_category_ids());
+                }
+                if (empty($p['images']) && $source->get_image_id()) {
+                    $product->set_image_id($source->get_image_id());
+                    $product->set_gallery_image_ids($source->get_gallery_image_ids());
+                }
+            }
+        }
         $product->set_status($status);
         if (!empty($p['categories'])) {
             $product->set_category_ids($this->category_ids((array) $p['categories']));

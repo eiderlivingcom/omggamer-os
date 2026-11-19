@@ -66,7 +66,11 @@ function omg_listing_title(string $name, array $platforms, array $regions, strin
     $name = trim(html_entity_decode(wp_strip_all_tags($name), ENT_QUOTES));
     $platforms = array_values(array_unique(array_filter(array_map('trim', $platforms))));
     $regions = array_values(array_unique(array_filter(array_map('trim', $regions), static fn ($r) => strcasecmp($r, 'Any') !== 0)));
-    // Per-platform listings are named "Game (Platform)": the platform is said once, further on.
+    // Separate listings are named "Game (Region) (Platform) Gift": each is said once, further on.
+    $name = trim((string) preg_replace('/\s+(Gift|Account|Access)$/i', '', $name));
+    foreach (array_merge($platforms, $regions) as $part) {
+        $name = trim((string) preg_replace('/\s*\(' . preg_quote($part, '/') . '\)\s*$/i', '', $name));
+    }
     foreach ($platforms as $pl) {
         $name = trim((string) preg_replace('/\s*\(' . preg_quote($pl, '/') . '\)\s*$/i', '', $name));
     }

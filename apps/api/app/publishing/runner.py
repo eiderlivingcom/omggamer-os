@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -91,25 +91,128 @@ async def split_by_platform(db: AsyncSession, product: Product) -> bool:
     return mode == "selected" and str(product.id) in set(cfg.get("split_products") or [])
 
 
-async def listing_groups(db: AsyncSession, product: Product) -> list[tuple[str, str | None]]:
-    """[(listing key, platform)]: ("", None) for one listing, else ("", main platform) + one per platform."""
+def edition_key(edition: str | None) -> str:
+    """Standard edition and no edition are the same option."""
+    e = (edition or "").strip().lower()
+    return "" if e in ("", "standard", "standard edition") else e
+
+
+@dataclass(frozen=True)
+class Group:
+    """One store listing: a platform, edition, region and delivery type (like driffle: one product each)."""
+
+    platform: str
+    edition: str  # "" = Standard
+    region: str  # defined region name
+    type: str  # key | gift | account ...
+    edition_label: str = ""
+
+    def key(self) -> tuple[str, str, str, str]:
+        return (self.platform.lower(), self.edition, self.region, self.type)
+
+    def __str__(self) -> str:
+        bits = [self.platform, self.edition_label or "Standard", self.region]
+        if self.type != "key":
+            bits.append(listing_facts.DELIVERY_LABELS.get(self.type, self.type))
+        return " / ".join(bits)
+
+
+def variant_group_key(v: ProductVariant) -> tuple[str, str, str, str]:
+    return (
+        (regions.platform_name(v.platform) or "").lower(),
+        edition_key(v.edition),
+        regions.canonical(v.region),
+        v.activation_type or "key",
+    )
+
+
+async def listing_groups(db: AsyncSession, product: Product) -> list[tuple[str, Group | None]]:
+    """[(listing key, group)]. One listing: [("", None)].
+
+    Separate listings (like driffle): one store product per platform + edition + region + type, all linked on
+    the store. Each platform's main option (Standard, Key, Global else Europe else the most offers) keeps the
+    URL that platform already had: the main platform's main option is the game's original listing (""), the
+    other platforms' main options are "<platform>". Every other option gets its own key, e.g.
+    "xbox-one-united-kingdom" or "steam-europe-gift".
+    """
     if not await split_by_platform(db, product):
         return [("", None)]
-    variants = list(
-        (await db.execute(select(ProductVariant).where(ProductVariant.product_id == product.id))).scalars()
+    supplied = set(
+        (
+            await db.execute(
+                select(SupplierProduct.variant_id).where(
+                    SupplierProduct.product_id == product.id, SupplierProduct.variant_id.is_not(None)
+                )
+            )
+        ).scalars()
     )
-    counts: dict[str, int] = {}
+    variants = [
+        v
+        for v in (
+            await db.execute(select(ProductVariant).where(ProductVariant.product_id == product.id))
+        ).scalars()
+        if v.id in supplied and (v.activation_type or "key") not in listing_facts.NOT_SOLD
+    ]
+    live = dict(
+        (
+            await db.execute(
+                select(SupplierOffer.variant_id, func.count())
+                .where(
+                    SupplierOffer.variant_id.in_([v.id for v in variants]),
+                    SupplierOffer.availability_status.in_(("in_stock", "preorder")),
+                    SupplierOffer.available_quantity > 0,
+                )
+                .group_by(SupplierOffer.variant_id)
+            )
+        ).all()
+    )
+    groups: dict[tuple[str, str, str, str], Group] = {}
+    offers: dict[tuple[str, str, str, str], int] = {}
     for v in variants:
-        p = regions.platform_name(v.platform) or ""
-        counts[p] = counts.get(p, 0) + 1
-    platforms = [p for p in counts if p]
-    if len(platforms) <= 1:
+        k = variant_group_key(v)
+        platform = regions.platform_name(v.platform) or ""
+        if not platform:
+            continue
+        groups.setdefault(k, Group(platform, k[1], k[2], k[3], (v.edition or "").strip() if k[1] else ""))
+        offers[k] = offers.get(k, 0) + int(live.get(v.id, 0))
+    if len(groups) <= 1:
         return [("", None)]
+
+    def primary_rank(g: Group) -> tuple[int, int, int, int, str]:
+        k = g.key()
+        region_pref = 0 if g.region == "Global" else 1 if g.region == "Europe" else 2
+        std = 0 if not g.edition else 1
+        return (std, 0 if g.type == "key" else 1, region_pref, -offers.get(k, 0), g.region)
+
+    by_platform: dict[str, list[Group]] = {}
+    for g in groups.values():
+        by_platform.setdefault(g.platform, []).append(g)
+    for gs in by_platform.values():
+        gs.sort(key=primary_rank)
+    platforms = list(by_platform)
     main = (
-        next((p for p in MAIN_PLATFORMS if p in counts), None)
-        or sorted(platforms, key=lambda p: (-counts[p], p))[0]
+        next((p for p in MAIN_PLATFORMS if p in by_platform), None)
+        or sorted(platforms, key=lambda p: (-len(by_platform[p]), p))[0]
     )
-    return [("", main)] + [(slugify(p), p) for p in sorted(platforms) if p != main]
+    out: list[tuple[str, Group | None]] = [("", by_platform[main][0])]
+    out += [(slugify(p)[:60], by_platform[p][0]) for p in sorted(platforms) if p != main]
+    taken = {k for k, _ in out}
+    for p in [main, *sorted(x for x in platforms if x != main)]:
+        for g in by_platform[p][1:]:
+            parts = [
+                g.platform,
+                g.edition_label if g.edition else "",
+                g.region,
+                g.type if g.type != "key" else "",
+            ]
+            base = slugify(" ".join(x for x in parts if x))[:56] or "option"
+            key, n = base, 1
+            while key in taken:
+                n += 1
+                key = f"{base}-{n}"
+            taken.add(key)
+            out.append((key, g))
+    return out
 
 
 def listing_external_id(product: Product, listing: str) -> str:
@@ -122,7 +225,7 @@ async def build_payload(
     sf: Storefront,
     status: str,
     *,
-    platform: str | None = None,
+    group: Group | None = None,
     listing: str = "",
 ) -> dict[str, Any]:
     variants = list(
@@ -178,25 +281,18 @@ async def build_payload(
 
     best: dict[tuple[str, str, str, str], ProductVariant] = {}
     for v in sorted(variants, key=rank):
-        best.setdefault(
-            (
-                (platform_of[v.id] or "").lower(),
-                (v.edition or "").lower(),
-                region_of[v.id],
-                v.activation_type or "key",
-            ),
-            v,
-        )
+        best.setdefault(variant_group_key(v), v)
     keep = {v.id for v in best.values()}
-    if platform is not None:
-        # One listing per platform: only this platform's options.
-        group_ids = [v.id for v in variants if platform_of[v.id] == platform]
+    if group is not None:
+        # Separate listings: only this platform + edition + region + type.
+        group_ids = [v.id for v in variants if variant_group_key(v) == group.key()]
         keep &= set(group_ids)
     else:
         group_ids = [v.id for v in variants]
     variants = [v for v in variants if v.id in keep]
+    platform = group.platform if group else None
     if not variants:
-        raise PublishError(f"No options for {platform or 'this game'}.")
+        raise PublishError(f"No options for {group or 'this game'}.")
 
     in_stock = await db.scalar(
         select(
@@ -288,11 +384,24 @@ async def build_payload(
             display.append({"name": name, "options": [x.strip() for x in str(value).split(",") if x.strip()]})
 
     name = content.title if content and content.title else product.canonical_title
-    if platform is not None and platform.lower() not in name.lower():
-        name = f"{name} ({platform})"
+    if group is not None:
+        # "Hollow Knight: Silksong Gold Edition (United Kingdom) (Xbox One)", plus " Gift" for gift links.
+        if group.edition and group.edition_label.lower() not in name.lower():
+            name = f"{name} {group.edition_label}"
+        name = f"{name} ({group.region}) ({group.platform})"
+        if group.type != "key":
+            name = f"{name} {listing_facts.DELIVERY_LABELS.get(group.type, group.type)}"
+    if not listing:
+        listing_sku = product.sku
+    elif group is not None and listing == slugify(group.platform)[:60]:
+        listing_sku = (
+            f"{product.sku}-{sku.platform_code(group.platform)}"  # as when the platform had one listing
+        )
+    else:
+        listing_sku = f"{variants[0].sku}-L"
     return {
         "external_id": listing_external_id(product, listing),
-        "sku": product.sku if not listing else f"{product.sku}-{sku.platform_code(platform)}",
+        "sku": listing_sku,
         "name": name,
         "slug": product.slug if not listing else f"{product.slug}-{listing}",
         # A per-platform listing only has its platform's options: the store drops any others it still has.
@@ -338,6 +447,9 @@ async def build_payload(
             # Listings of one game share the group, so the store can link them (platform switcher).
             "listing_group": str(product.id),
             "listing_platform": platform or "",
+            "listing_edition": (group.edition_label or "Standard") if group else "",
+            "listing_region": group.region if group else "",
+            "listing_type": listing_facts.DELIVERY_LABELS.get(group.type, group.type) if group else "",
             "product_type": product.product_type,
             # What each region on this product means, for the region note on the product page.
             "region_notes": {
@@ -399,7 +511,7 @@ class Publisher:
             published: list[str] = []
             skipped: list[str] = []
             unchanged = 0
-            for listing, platform in groups:
+            for listing, group in groups:
                 mapping = (
                     await db.execute(
                         select(StorefrontProductMapping).where(
@@ -410,13 +522,11 @@ class Publisher:
                     )
                 ).scalar_one_or_none()
                 try:
-                    payload = await build_payload(
-                        db, product, sf, "publish", platform=platform, listing=listing
-                    )
+                    payload = await build_payload(db, product, sf, "publish", group=group, listing=listing)
                 except PublishError as exc:
                     if listing and len(groups) > 1:
                         # Another platform of the game can still go live; this one waits for an offer.
-                        skipped.append(f"{platform}: {exc}")
+                        skipped.append(f"{group}: {exc}")
                         continue
                     await db.rollback()
                     return await self._fail(db, item, sf_id, str(exc), pid)
@@ -482,7 +592,7 @@ class Publisher:
                         status="success",
                         response={
                             "listing": listing or "main",
-                            "platform": platform,
+                            "platform": str(group) if group else None,
                             **{
                                 k: result.get(k)
                                 for k in (

@@ -354,7 +354,7 @@ async def test_one_listing_per_platform(
 
     info = (await client.get(f"/api/v1/publishing/products/{pid}/listings")).json()
     assert info["mode"] == "selected" and info["selected"] is False
-    assert info["listings"] == [{"listing": "main", "platform": None}]
+    assert info["listings"] == [{"listing": "main", "platform": None, "label": "All options"}]
 
     # Turning it on re-publishes straight away: Steam keeps the original listing, Switch gets its own.
     r = (await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": True})).json()
@@ -497,3 +497,52 @@ async def test_gift_is_its_own_type_and_access_is_not_sold(
         for v in store.products[str(pid)]["body"]["variants"]
     )
     assert opts == [("Steam", "Gift"), ("Steam", "Key"), ("Switch", "Key")]
+
+
+async def test_separate_listing_per_platform_edition_region_and_type(
+    client: AsyncClient, make_user: MakeUser, store: FakeStore, queued: list[uuid.UUID]
+) -> None:
+    await make_user()
+    await login(client)
+    pid = await seed()
+    async with get_sessionmaker()() as db:
+        k = (await db.execute(select(Supplier).where(Supplier.code == "kinguin"))).scalar_one()
+        svc = CatalogueService(db)
+        for ext, title, region, act in [
+            ("11", "Hades EU PC Steam CD Key", "Europe", "key"),
+            ("12", "Hades PC Steam Altergift", "Global", "gift"),
+        ]:
+            await svc.ingest(
+                k,
+                NormalizedProduct(
+                    external_product_id=ext,
+                    original_title=title,
+                    base_title="Hades",
+                    platform="Steam",
+                    region=region,
+                    activation_type=act,
+                    offers=[
+                        NormalizedOffer(
+                            external_offer_id=f"o{ext}", currency="EUR", price=Decimal("9"), quantity=3
+                        )
+                    ],
+                ),
+            )
+        await db.commit()
+    await connect(client, store)
+    await client.put(f"/api/v1/publishing/products/{pid}/split", json={"enabled": True})
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+
+    ext = {e.split("~")[1] if "~" in e else "": b["body"] for e, b in store.products.items()}
+    assert set(ext) == {"", "switch", "steam-europe", "steam-global-gift"}
+    # The original listing is Steam Global Key (Standard); each listing has exactly its one option.
+    assert ext[""]["slug"] == "hades" and len(ext[""]["variants"]) == 1
+    assert ext[""]["meta"]["listing_region"] == "Global" and ext[""]["meta"]["listing_type"] == "Key"
+    assert ext["steam-europe"]["slug"] == "hades-steam-europe"
+    assert ext["steam-europe"]["name"].endswith("(Europe) (Steam)")
+    assert ext["steam-global-gift"]["meta"]["listing_type"] == "Gift"
+    assert ext["steam-global-gift"]["name"].endswith("(Global) (Steam) Gift")
+    assert len({b["meta"]["listing_group"] for b in ext.values()}) == 1

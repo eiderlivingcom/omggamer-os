@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: OMGGamer platform listings
- * Description: Games published as one listing per platform (OMGGamer OS → one listing per platform) share a listing
- *              group (_omg_listing_group). Each product page shows the game's other platform listings as sliding
- *              product cards ("Other platforms") right below the offers.
- * Version: 1.1.0
+ * Description: Games published as separate listings (OMGGamer OS: one product per platform + edition + region +
+ *              type, like driffle) share a listing group (_omg_listing_group). Each product page gets the group as
+ *              window.OMG_LISTINGS (the buy box's region dropdown and edition / type cards link to these products)
+ *              and shows the other platforms as sliding product cards right below the offers.
+ * Version: 1.2.0
  */
 
 if (!defined('ABSPATH')) {
@@ -28,7 +29,7 @@ final class OMG_Platform_Listings
         $ids = get_posts([
             'post_type' => 'product',
             'post_status' => 'publish',
-            'numberposts' => 20,
+            'numberposts' => 200,
             'fields' => 'ids',
             'meta_key' => '_omg_listing_group',
             'meta_value' => $group,
@@ -44,9 +45,18 @@ final class OMG_Platform_Listings
             }
             $regions = wp_get_post_terms($id, 'pa_region', ['fields' => 'slugs']);
             $region_names = wp_get_post_terms($id, 'pa_region', ['fields' => 'names']);
+            $p = wc_get_product($id);
+            $ext = (string) get_post_meta($id, '_omg_external_id', true);
             $out[] = [
                 'id' => (int) $id,
                 'platform' => $platform,
+                'edition' => (string) get_post_meta($id, '_omg_listing_edition', true) ?: 'Standard',
+                'region' => (string) get_post_meta($id, '_omg_listing_region', true),
+                'type' => (string) get_post_meta($id, '_omg_listing_type', true) ?: 'Key',
+                // The platform's own page: the original listing, or "<id>~<platform>" (its URL before the split).
+                'primary' => !str_contains($ext, '~') || substr($ext, strpos($ext, '~') + 1) === sanitize_title($platform),
+                'price' => $p ? (float) ($p->is_type('variable') ? $p->get_variation_price('min', true) : wc_get_price_to_display($p)) : 0.0,
+                'in_stock' => $p ? $p->is_in_stock() : false,
                 'url' => get_permalink($id),
                 'regions' => is_wp_error($regions) ? [] : array_values($regions),
                 'region_names' => is_wp_error($region_names) ? [] : array_values($region_names),
@@ -84,7 +94,36 @@ final class OMG_Platform_Listings
             return;
         }
         $current = (int) get_queried_object_id();
-        $others = array_values(array_filter(self::siblings($current), static fn ($s) => $s['id'] !== $current));
+        $all = self::siblings($current);
+        if (!$all) {
+            return;
+        }
+        $me = current(array_filter($all, static fn ($s) => $s['id'] === $current)) ?: null;
+        // For the buy box: region dropdown and edition / type cards link to these products.
+        $data = array_map(static fn ($s) => [
+            'id' => $s['id'], 'url' => $s['url'], 'platform' => $s['platform'], 'edition' => $s['edition'],
+            'region' => $s['region'] ?: ($s['region_names'][0] ?? ''), 'type' => $s['type'],
+            'price' => $s['price'], 'in_stock' => $s['in_stock'],
+        ], $all);
+        echo '<script id="omg-listings-data">window.OMG_LISTINGS=' . wp_json_encode(['current' => $current, 'items' => $data]) . ';</script>';
+        // "Other platforms": one card per other platform (its own page, else its cheapest product in stock).
+        $by = [];
+        foreach ($all as $s) {
+            if ($me && $s['platform'] === $me['platform']) {
+                continue;
+            }
+            $have = $by[$s['platform']] ?? null;
+            $better = !$have || ($s['primary'] && !$have['primary'])
+                || ($s['primary'] === $have['primary'] && $s['in_stock'] && (!$have['in_stock'] || $s['price'] < $have['price']));
+            if ($better) {
+                $by[$s['platform']] = $s;
+            }
+        }
+        $others = array_values($by);
+        foreach ($others as &$o) {
+            $o['region_names'] = array_values(array_unique(array_column(array_filter($all, static fn ($s) => $s['platform'] === $o['platform']), 'region')));
+        }
+        unset($o);
         if (!$others) {
             return;
         }

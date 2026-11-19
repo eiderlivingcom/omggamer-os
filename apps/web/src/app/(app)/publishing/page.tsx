@@ -53,16 +53,16 @@ function SplitSetting({ canManage }: { canManage: boolean }) {
   }
   if (mode === null) return null;
   return (
-    <Card title="One listing per platform">
+    <Card title="Separate listings">
       <p className="mb-3 text-xs text-ink-500">
-        A game sold on several platforms gets one store listing per platform (regions as options). The main platform keeps the original URL; a switcher on the product page links the others.
+        Each platform + edition + region + type of a game gets its own store product, all linked on the product page. Each platform keeps its current URL for its main option.
       </p>
       <select
         className="h-9 rounded-md border border-ink-200 bg-white px-2 text-sm"
         value={mode}
         disabled={!canManage}
         onChange={(e) => void save(e.target.value)}
-        aria-label="One listing per platform"
+        aria-label="Separate listings"
       >
         <option value="off">Off: one listing per game</option>
         <option value="selected">Selected games only ({count} on)</option>

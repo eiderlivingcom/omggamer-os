@@ -245,7 +245,57 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     return M.fmt.replace('%1$s', M.sym).replace('%2$s', n.join(M.ds)).replace(/&nbsp;/g, ' ');
   }
   /* Products without editions (gift cards: region + amount): region dropdown and one card per amount. */
+  /* Separate listings (one product per platform + edition + region + type, like driffle): the region dropdown and
+     the edition / type cards link to the game's other products (window.OMG_LISTINGS from omg-platform-listings). */
+  function linkedCards(L){
+    var ed = document.getElementById('omg-dg-ed'), wrap = document.getElementById('omg-dg-ed-cards'), holder = document.getElementById('omg-dg-region');
+    if (!ed || !wrap || wrap.querySelector('.omg-ed-card')) return;
+    var cur = L.items.filter(function(x){ return x.id === L.current; })[0]; if (!cur) return;
+    ed.classList.remove('omg-needs-js');
+    var all = document.getElementById('omg-dg-ed-all'); if (all) all.hidden = true;
+    var labelEl = document.getElementById('omg-dg-ed-label'); if (labelEl) labelEl.textContent = 'Region';
+    var mine = L.items.filter(function(x){ return x.platform === cur.platform; });
+    var uniq = function(list, k){ var seen = {}, out = []; list.forEach(function(x){ if (!seen[x[k]]) { seen[x[k]] = 1; out.push(x[k]); } }); return out; };
+    // The closest product for a choice: same choice, then same region, edition and type as this page, then cheapest.
+    var best = function(list, want){
+      return list.slice().sort(function(a, b){
+        var sa = 0, sb = 0;
+        ['region', 'edition', 'type'].forEach(function(k, i){ var w = [100, 10, 1][i]; if (a[k] === want[k]) sa += w; if (b[k] === want[k]) sb += w; });
+        return (sb - sa) || ((b.in_stock ? 1 : 0) - (a.in_stock ? 1 : 0)) || (a.price - b.price);
+      })[0];
+    };
+    var go = function(x){ if (x && x.id !== cur.id) window.location.href = x.url; };
+    if (holder && !holder.querySelector('select')) {
+      var rs = document.createElement('select'); rs.setAttribute('aria-label', 'Region');
+      uniq(mine, 'region').forEach(function(r){ rs.appendChild(new Option(r, r, false, r === cur.region)); });
+      holder.appendChild(rs);
+      rs.addEventListener('change', function(){
+        var pool = mine.filter(function(x){ return x.region === rs.value; });
+        go(best(pool, {region: rs.value, edition: cur.edition, type: cur.type}));
+      });
+    }
+    var row = function(key, label, values){
+      if (wrap.querySelector('.omg-ed-card')) { var br = document.createElement('div'); br.className = 'omg-ed-break'; br.style.cssText = 'grid-column:1/-1;flex-basis:100%;height:0;margin:0'; wrap.appendChild(br); }
+      values.forEach(function(v){
+        var pool = mine.filter(function(x){ return x[key] === v; });
+        var want = {region: cur.region, edition: cur.edition, type: cur.type}; want[key] = v;
+        var target = best(pool, want), on = v === cur[key];
+        var same = pool.filter(function(x){ return x.region === cur.region && x.in_stock; });
+        var min = (same.length ? same : pool.filter(function(x){ return x.in_stock; })).reduce(function(m, x){ return m === null || x.price < m ? x.price : m; }, null);
+        var a = document.createElement(on ? 'div' : 'a'); a.className = 'omg-ed-card' + (on ? ' is-active' : '');
+        if (!on) a.href = target.url; else a.setAttribute('aria-current', 'true');
+        a.innerHTML = '<span class="omg-ed-name"></span><span class="omg-radio"></span><span class="omg-ed-sub"></span><span class="omg-ed-price"></span>';
+        a.querySelector('.omg-ed-name').textContent = v;
+        a.querySelector('.omg-ed-sub').textContent = label + (!on && target.region !== cur.region ? ' · ' + target.region : '');
+        a.querySelector('.omg-ed-price').textContent = min === null ? 'Unavailable' : 'from ' + money(min);
+        wrap.appendChild(a);
+      });
+    };
+    row('edition', 'Edition', uniq(mine.filter(function(x){ return x.type === cur.type; }).concat(mine), 'edition'));
+    var types = uniq(mine, 'type'); if (types.length > 1) row('type', 'Type', types);
+  }
   function optionCards(){
+    if (window.OMG_LISTINGS && window.OMG_LISTINGS.items && window.OMG_LISTINGS.items.length > 1) { linkedCards(window.OMG_LISTINGS); return; }
     var ed = document.getElementById('omg-dg-ed'), wrap = document.getElementById('omg-dg-ed-cards'), holder = document.getElementById('omg-dg-region');
     var form = document.querySelector('form.variations_form');
     if (!ed || !wrap || !form || wrap.querySelector('.omg-ed-card')) return;

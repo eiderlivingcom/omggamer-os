@@ -261,6 +261,9 @@ final class OMG_SEO
                 $t_plat = wc_get_product_terms($p->get_id(), 'pa_platform', ['fields' => 'names']);
                 $t_reg = wc_get_product_terms($p->get_id(), 'pa_region', ['fields' => 'names']);
                 $t_type = (string) get_post_meta($p->get_id(), '_omg_product_type', true) ?: 'game';
+                if (strcasecmp((string) get_post_meta($p->get_id(), '_omg_listing_type', true), 'Gift') === 0) {
+                    $t_type = 'gift_link';
+                }
                 $full = function_exists('omg_listing_title') ? omg_listing_title($name, $t_plat, $t_reg, $t_type) : 'Buy ' . $name;
                 $own_t = (string) preg_replace('/\s*[–-]\s*(Buy for\s*)?[$€£]\s?[\d.,]+/u', '', $own_t); // no prices
                 $c['title'] = $own_t ?: self::fit([

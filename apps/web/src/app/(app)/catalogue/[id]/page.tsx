@@ -104,7 +104,7 @@ function AliasCard({ productId, canEdit }: { productId: string; canEdit: boolean
 type ListingInfo = {
   mode: "off" | "selected" | "all";
   selected: boolean;
-  listings: { listing: string; platform: string | null }[];
+  listings: { listing: string; platform: string | null; label: string }[];
   store: { listing: string; status: string; wc_id: string | null; variations: number }[];
 };
 
@@ -132,13 +132,13 @@ function PlatformListings({ productId, canManage }: { productId: string; canMana
   if (!info) return null;
   const on = info.mode === "all" || (info.mode === "selected" && info.selected);
   return (
-    <Card title="One listing per platform">
+    <Card title="Separate listings">
       <p className="mb-3 text-xs text-ink-500">
-        Each platform gets its own store listing with its regions as options; the main platform keeps the original URL and a switcher links them. Content stays as it is on the store.
+        Each platform + edition + region + type gets its own store product, all linked: the region dropdown and edition cards open the matching product, and other platforms show below the offers. Each platform keeps its current URL for its main option. Content stays as it is on the store.
       </p>
       <dl className="mb-3 divide-y divide-ink-100">
         <Row k="Status" v={info.mode === "all" ? "On for every game" : info.mode === "off" ? "Off for every game" : on ? "On for this game" : "Off for this game"} />
-        <Row k="Listings" v={info.listings.map((l) => (l.listing === "main" ? `${l.platform ?? "All platforms"} (main)` : l.platform)).join(" · ")} />
+        <Row k="Listings" v={info.listings.map((l) => (l.listing === "main" ? `${l.label} (main)` : l.label)).join(" · ")} />
         {info.store.length > 0 && (
           <Row k="On the store" v={info.store.map((m) => `${m.listing}: ${m.status} · #${m.wc_id ?? "—"} · ${m.variations} options`).join("  |  ")} />
         )}

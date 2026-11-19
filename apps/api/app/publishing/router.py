@@ -454,7 +454,14 @@ async def product_listings(
     return {
         "mode": mode,
         "selected": str(product_id) in set(v.get("split_products") or []),
-        "listings": [{"listing": k or "main", "platform": p} for k, p in groups],
+        "listings": [
+            {
+                "listing": k or "main",
+                "platform": g.platform if g else None,
+                "label": str(g) if g else "All options",
+            }
+            for k, g in groups
+        ],
         "store": [
             {
                 "listing": m.listing or "main",
