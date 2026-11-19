@@ -2,10 +2,9 @@
 /**
  * Plugin Name: OMGGamer platform listings
  * Description: Games published as one listing per platform (OMGGamer OS → one listing per platform) share a listing
- *              group (_omg_listing_group). Their product pages show a "Platform" switcher above the edition/region
- *              picker: the current platform is selected, the others link to their own listing and keep the chosen
- *              region (?attribute_pa_region=...) when that listing sells it.
- * Version: 1.0.1
+ *              group (_omg_listing_group). Each product page shows the game's other platform listings as sliding
+ *              product cards ("Other platforms") right below the offers.
+ * Version: 1.1.0
  */
 
 if (!defined('ABSPATH')) {
@@ -44,11 +43,13 @@ final class OMG_Platform_Listings
                 continue;
             }
             $regions = wp_get_post_terms($id, 'pa_region', ['fields' => 'slugs']);
+            $region_names = wp_get_post_terms($id, 'pa_region', ['fields' => 'names']);
             $out[] = [
                 'id' => (int) $id,
                 'platform' => $platform,
                 'url' => get_permalink($id),
                 'regions' => is_wp_error($regions) ? [] : array_values($regions),
+                'region_names' => is_wp_error($region_names) ? [] : array_values($region_names),
                 'main' => !str_contains((string) get_post_meta($id, '_omg_external_id', true), '~'),
             ];
         }
@@ -56,65 +57,83 @@ final class OMG_Platform_Listings
         return count($out) > 1 ? $out : [];
     }
 
+    /** One card in the store's collection style (same markup as "Related games"). */
+    private static function card(array $s): string
+    {
+        $p = wc_get_product($s['id']);
+        if (!$p) {
+            return '';
+        }
+        $img = (int) $p->get_image_id();
+        $src = $img ? wp_get_attachment_image_url($img, 'woocommerce_single') : wc_placeholder_img_src();
+        $srcset = $img ? (string) wp_get_attachment_image_srcset($img, 'woocommerce_single') : '';
+        $min = (float) ($p->is_type('variable') ? $p->get_variation_price('min', true) : wc_get_price_to_display($p));
+        $regions = $s['region_names'];
+        $region = count($regions) === 1 ? $regions[0] : (count($regions) > 1 ? count($regions) . ' regions' : '');
+        $name = trim((string) preg_replace('/\s*\(' . preg_quote($s['platform'], '/') . '\)\s*$/i', '', html_entity_decode($p->get_name(), ENT_QUOTES)));
+        ob_start(); ?>
+<div class="omg-ac"><a class="omg-ac-card" href="<?php echo esc_url($s['url']); ?>"><div class="omg-ac-cover"><img class="omg-ac-img" src="<?php echo esc_url((string) $src); ?>"<?php if ($srcset) : ?> srcset="<?php echo esc_attr($srcset); ?>" sizes="(max-width: 767px) 50vw, 25vw"<?php endif; ?> alt="<?php echo esc_attr($name . ' ' . $s['platform'] . ' cover'); ?>" loading="lazy"></div><div class="omg-ac-body"><h3 class="omg-ac-title"><?php echo esc_html($name); ?></h3><div class="omg-ac-meta"><span class="omg-ac-platform"><?php echo esc_html($s['platform']); ?></span><?php if ($region) : ?><span class="omg-ac-region"><?php echo esc_html($region); ?></span><?php endif; ?></div><?php if ($min > 0) : ?><span class="omg-ac-from">from</span><div class="omg-ac-pricerow"><div class="omg-ac-price"><p class="price"><?php echo wp_kses_post(wc_price($min)); ?></p></div></div><?php endif; ?></div></a><a class="omg-pf" href="<?php echo esc_url(home_url('/platform/' . sanitize_title($s['platform']) . '/')); ?>" data-pf="<?php echo esc_attr(sanitize_title($s['platform'])); ?>" title="<?php echo esc_attr($s['platform']); ?>" aria-label="<?php echo esc_attr('Shop ' . $s['platform']); ?>"><span><?php echo esc_html($s['platform']); ?></span></a></div>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /** "Other platforms": the game's other platform listings as sliding product cards, below the offers. */
     public static function render(): void
     {
         if (!function_exists('is_product') || !is_product()) {
             return;
         }
         $current = (int) get_queried_object_id();
-        $list = self::siblings($current);
-        if (!$list) {
+        $others = array_values(array_filter(self::siblings($current), static fn ($s) => $s['id'] !== $current));
+        if (!$others) {
+            return;
+        }
+        $cards = implode('', array_map([__CLASS__, 'card'], $others));
+        if ($cards === '') {
             return;
         }
         ?>
-<div id="omg-pl" class="omg-pp-card" hidden>
-  <div class="omg-pl-head"><span>Platform</span></div>
-  <div class="omg-pl-list" role="list">
-    <?php foreach ($list as $s) :
-        $on = $s['id'] === $current; ?>
-    <a role="listitem" class="omg-pl-item<?php echo $on ? ' is-active' : ''; ?>" href="<?php echo esc_url($s['url']); ?>"
-       data-regions="<?php echo esc_attr(implode(' ', $s['regions'])); ?>"<?php echo $on ? ' aria-current="page"' : ''; ?>>
-      <span class="omg-pf" data-pf="<?php echo esc_attr(sanitize_title($s['platform'])); ?>" aria-hidden="true"></span>
-      <span class="omg-pl-name"><?php echo esc_html($s['platform']); ?></span>
-    </a>
-    <?php endforeach; ?>
+<section id="omg-pl" class="omg-pp-card" aria-labelledby="omg-pl-h" hidden>
+  <div class="omg-pl-head"><h2 id="omg-pl-h" class="omg-pp-h2">Other platforms</h2>
+    <div class="omg-rel-nav"><button type="button" class="omg-rel-arrow" data-dir="-1" aria-label="Previous"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button><button type="button" class="omg-rel-arrow" data-dir="1" aria-label="Next"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button></div>
   </div>
-</div>
+  <div class="omg-ar-cards omg-rel-cards omg-rel-track omg-pl-track"><?php echo $cards; // escaped in card() ?></div>
+</section>
 <style id="omg-pl-css">
-#omg-pl{margin-bottom:16px}
-#omg-pl .omg-pl-head{margin-bottom:10px;font-weight:600;color:#f4f2fb}
-#omg-pl .omg-pl-list{display:flex;flex-wrap:wrap;gap:8px}
-#omg-pl .omg-pl-item{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid #2a2540;background:#141121;color:#d9d4ea;text-decoration:none;font-weight:600;font-size:14px;transition:border-color .2s,background .2s}
-#omg-pl .omg-pl-item:hover{border-color:#8b5cf6}
-#omg-pl .omg-pl-item.is-active{border-color:#8b5cf6;background:rgba(139,92,246,.14);color:#fff;cursor:default}
-#omg-pl .omg-pf{width:22px;height:22px;border-radius:6px;flex:none}
-#omg-pl .omg-pf::before{width:14px;height:14px;margin:4px}
-#omg-pl .omg-pl-item:focus-visible{outline:2px solid #c4b5fd;outline-offset:2px}
+#omg-pl{margin:0}
+#omg-pl .omg-pl-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+#omg-pl .omg-pl-head h2{margin:0}
+#omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 60px) / 4)}
+#omg-pl .omg-ac-meta{display:flex;flex-wrap:wrap;gap:6px}
+#omg-pl .omg-ac-platform{font-weight:600}
+@media (max-width:1000px){#omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 20px) / 2.2)}}
+@media (max-width:560px){#omg-pl .omg-pl-track{grid-auto-columns:72%}}
 </style>
 <script id="omg-pl-js">
 (function () {
   var box = document.getElementById('omg-pl'); if (!box) return;
-  // Above the edition / region picker, else above the add-to-cart form.
-  var anchor = document.getElementById('omg-dg-ed') || document.querySelector('form.variations_form, form.cart');
+  // Right after the offers (else after the add-to-cart form); the layout orders cards with CSS "order".
+  var anchor = document.getElementById('omg-dg-offers') || document.querySelector('form.variations_form, form.cart');
   if (anchor && anchor.parentNode) {
-    anchor.parentNode.insertBefore(box, anchor);
-    // The product layout orders its cards with CSS "order": take the edition card's slot, just before it.
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
     var ord = getComputedStyle(anchor).order; if (ord && ord !== '0') box.style.order = ord;
   }
   box.hidden = false;
-  var links = box.querySelectorAll('.omg-pl-item:not(.is-active)');
-  var base = []; links.forEach(function (a) { base.push(a.href); });
-  function keepRegion() {
-    var sel = document.querySelector('select[name="attribute_pa_region"]');
-    var r = sel ? sel.value : '';
-    links.forEach(function (a, i) {
-      var ok = r && (' ' + a.getAttribute('data-regions') + ' ').indexOf(' ' + r + ' ') !== -1;
-      a.href = ok ? base[i] + (base[i].indexOf('?') === -1 ? '?' : '&') + 'attribute_pa_region=' + encodeURIComponent(r) : base[i];
-    });
+  var track = box.querySelector('.omg-pl-track'), btns = box.querySelectorAll('.omg-rel-arrow'), nav = box.querySelector('.omg-rel-nav');
+  function update() {
+    var max = track.scrollWidth - track.clientWidth - 2;
+    if (nav) nav.hidden = max <= 0;
+    btns[0].disabled = track.scrollLeft <= 2; btns[1].disabled = track.scrollLeft >= max;
   }
-  document.addEventListener('change', function (e) { if (e.target && e.target.name === 'attribute_pa_region') keepRegion(); });
-  if (window.jQuery) jQuery(document).on('found_variation reset_data', 'form.variations_form', keepRegion);
-  keepRegion();
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var c = track.querySelector('.omg-ac'); var step = c ? c.getBoundingClientRect().width + 20 : track.clientWidth * 0.8;
+      track.scrollBy({ left: step * Number(b.getAttribute('data-dir')), behavior: 'smooth' });
+    });
+  });
+  track.addEventListener('scroll', function () { window.requestAnimationFrame(update); }, { passive: true });
+  window.addEventListener('resize', update);
+  update();
 })();
 </script>
         <?php
