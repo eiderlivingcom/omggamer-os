@@ -248,8 +248,28 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
   /* Separate listings (one product per platform + edition + region + type, like driffle): the region dropdown and
      the edition / type cards link to the game's other products (window.OMG_LISTINGS from omg-platform-listings). */
   function linkedCards(L){
-    var ed = document.getElementById('omg-dg-ed'), wrap = document.getElementById('omg-dg-ed-cards'), holder = document.getElementById('omg-dg-region');
-    if (!ed || !wrap || wrap.querySelector('.omg-ed-card')) return;
+    var ed = document.getElementById('omg-dg-ed');
+    if (!ed) {
+      // Single-option products use a template without the region / edition card: build it above the offers.
+      var offers = document.getElementById('omg-dg-offers');
+      if (!offers || !offers.parentNode) return;
+      ed = document.createElement('div'); ed.id = 'omg-dg-ed'; ed.className = 'omg-pp-card omg-ed-built';
+      ed.innerHTML = '<div id="omg-dg-ed-head"><span id="omg-dg-ed-label">Region</span><div id="omg-dg-region"></div><span id="omg-dg-ed-all">All variations</span></div><div id="omg-dg-ed-cards"></div>';
+      offers.parentNode.insertBefore(ed, offers);
+      var ord = getComputedStyle(offers).order; if (ord && ord !== '0') ed.style.order = ord;
+      if (!document.getElementById('omg-ed-built-css')) {
+        var st = document.createElement('style'); st.id = 'omg-ed-built-css';
+        st.textContent = '.omg-ed-built #omg-dg-ed-head{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:18px}'
+          + '.omg-ed-built #omg-dg-ed-label{color:#fff;font:600 20px/1.2 Poppins,sans-serif}'
+          + '.omg-ed-built #omg-dg-ed-all{margin-left:auto;color:#a78bfa;font:500 15px/1 Poppins,sans-serif}'
+          + '.omg-ed-built #omg-dg-ed-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}'
+          + '.omg-ed-built .omg-ed-break{display:none}'
+          + '@media (max-width:560px){.omg-ed-built #omg-dg-ed-cards{grid-template-columns:1fr 1fr}}';
+        document.head.appendChild(st);
+      }
+    }
+    var wrap = document.getElementById('omg-dg-ed-cards'), holder = document.getElementById('omg-dg-region');
+    if (!wrap || wrap.querySelector('.omg-ed-card')) return;
     var cur = L.items.filter(function(x){ return x.id === L.current; })[0]; if (!cur) return;
     ed.classList.remove('omg-needs-js');
     var all = document.getElementById('omg-dg-ed-all');
