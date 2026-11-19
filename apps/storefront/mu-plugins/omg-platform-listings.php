@@ -256,13 +256,13 @@ final class OMG_Platform_Listings
   <div class="omg-ar-cards omg-rel-cards omg-rel-track omg-pl-track"><?php echo $cards; // escaped in card() ?></div>
 </section>
 <style id="omg-pl-css">
-#omg-pl{margin:0}
+#omg-pl{margin:0;width:100%;max-width:none;align-self:stretch;box-sizing:border-box}
 #omg-pl .omg-pl-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
 #omg-pl .omg-pl-head h2{margin:0}
-#omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 60px) / 4)}
+#omg-pl .omg-pl-track{width:100%;grid-auto-columns:minmax(200px,calc((100% - 60px) / 4))!important}
 #omg-pl .omg-ac-meta{display:flex;flex-wrap:wrap;gap:6px}
-@media (max-width:1000px){#omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 20px) / 2.2)}}
-@media (max-width:560px){#omg-pl .omg-pl-track{grid-auto-columns:72%}}
+@media (max-width:1000px){#omg-pl .omg-pl-track{grid-auto-columns:calc((100% - 20px) / 2.2)!important}}
+@media (max-width:560px){#omg-pl .omg-pl-track{grid-auto-columns:72%!important}}
 </style>
 <script id="omg-pl-js">
 (function () {
