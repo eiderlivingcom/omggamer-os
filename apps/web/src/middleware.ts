@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * Staff door. When OS_DOOR_KEY is set (server .env), os.omggamer.com answers a bare 404 to anyone who has
  * not opened the door link (https://os.omggamer.com/?door=<key>) on this browser, or who is not on an
  * address listed in OS_ALLOWED_IPS. Outsiders cannot see the sign-in page or call the API at all.
- * Machine routes stay open: supplier and storefront webhooks (signed) and the health check.
+ * Machine routes stay open: supplier and storefront webhooks (signed), the health check and the store's image
+ * fetch of renamed images while a game is published.
  * Signed-out staff are sent to the sign-in page as before; the API still checks every request itself.
  */
 export const config = {
@@ -12,7 +13,12 @@ export const config = {
   matcher: ["/((?!_next/static|_next/image).*)"],
 };
 
-const OPEN = [/^\/api\/v1\/webhooks\//, /^\/api\/v1\/health$/];
+// The store fetches a game's SEO-renamed images while it is being published (they are deleted right after).
+const OPEN = [
+  /^\/api\/v1\/webhooks\//,
+  /^\/api\/v1\/health$/,
+  /^\/api\/v1\/files\/media\/[0-9a-f-]{36}\/[a-z0-9][a-z0-9-]{0,140}\.(jpg|jpeg|png|webp|gif)$/,
+];
 const PUBLIC_ASSETS = /^\/(favicon\.ico|icon\.png|apple-icon\.png|omggamer-logo\.svg)$/;
 const COOKIE = "omg_door";
 
