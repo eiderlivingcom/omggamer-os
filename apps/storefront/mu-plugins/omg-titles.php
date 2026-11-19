@@ -56,6 +56,33 @@ function omg_title_store(string $platform): string
     return $map[$p] ?? trim($platform);
 }
 
+/** Game currency (Robux, V-Bucks, coins...): OS product type, the currency / top-up category, or amount options. */
+function omg_is_currency(int $product_id): bool
+{
+    static $memo = [];
+    if (isset($memo[$product_id])) {
+        return $memo[$product_id];
+    }
+    $type = (string) get_post_meta($product_id, '_omg_product_type', true);
+    if ($type !== '') {
+        return $memo[$product_id] = $type === 'game_currency';
+    }
+    foreach (wp_get_post_terms($product_id, 'product_cat', ['fields' => 'slugs']) ?: [] as $slug) {
+        if (is_string($slug) && preg_match('/currenc|top-?up|robux|v-?bucks|coins/', $slug)) {
+            return $memo[$product_id] = true;
+        }
+    }
+    $p = function_exists('wc_get_product') ? wc_get_product($product_id) : null;
+    if ($p && $p->is_type('variable')) {
+        foreach (array_keys($p->get_variation_attributes()) as $attr) {
+            if (preg_match('/(quantity|amount|denomination|value)$/i', (string) $attr)) {
+                return $memo[$product_id] = true;
+            }
+        }
+    }
+    return $memo[$product_id] = false;
+}
+
 /**
  * @param string[] $platforms platform names the listing (or item) has
  * @param string[] $regions   region names; one region is shown, several are left out
@@ -68,6 +95,9 @@ function omg_listing_title(string $name, array $platforms, array $regions, strin
     $regions = array_values(array_unique(array_filter(array_map('trim', $regions), static fn ($r) => strcasecmp($r, 'Any') !== 0)));
     // Separate listings are named "Game (Region) (Platform) Gift": each is said once, further on.
     $name = trim((string) preg_replace('/\s+(Gift|Account|Access)$/i', '', $name));
+    // What it is is said at the end ("- Digital Key", "- Top-up"): not in the name too.
+    $name = trim((string) preg_replace('/\s*[-\x{2013}\x{2014}]\s*(digital key|cd key|key|top-?up|gift card)$/iu', '', $name));
+    $name = trim((string) preg_replace('/\s+[\x{2013}\x{2014}]\s+/u', ' ', $name));
     foreach (array_merge($platforms, $regions) as $part) {
         $name = trim((string) preg_replace('/\s*\(' . preg_quote($part, '/') . '\)\s*$/i', '', $name));
     }

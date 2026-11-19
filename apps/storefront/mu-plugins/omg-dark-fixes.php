@@ -354,7 +354,9 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
     sels.forEach(function(x){ if (x !== rg && real(x).length === 1) set(x, real(x)[0].value); });
     var edSel = sels.filter(function(x){ return /edition/.test(x.name); })[0] || null;
     var rows = [];
-    rows.push(edSel && real(edSel).length > 1 ? edSel : null); // null: one fixed edition card
+    // Game currency has amounts, not editions: no edition card.
+    var currency = document.body.classList.contains('omg-currency');
+    if (!currency) rows.push(edSel && real(edSel).length > 1 ? edSel : null); // null: one fixed edition card
     sels.forEach(function(x){ if (x !== rg && x !== edSel && x !== pl && real(x).length > 1) rows.push(x); });
     if (pl && real(pl).length > 1) rows.push(pl); // one listing, many platforms
     var labelEl = document.getElementById('omg-dg-ed-label');
@@ -389,6 +391,7 @@ html body #omg-dg-region.omg-dd-on select{position:absolute!important;inset:0;op
         return;
       }
       var lab = form.querySelector('label[for="' + sel.id + '"]'); var attrName = lab ? lab.textContent.trim() : '';
+      if (currency && /quantity|amount|denomination|value/i.test(attrName + ' ' + sel.name)) attrName = 'Amount';
       Array.prototype.forEach.call(sel.options, function(o){
         if (!o.value) return;
         var b = document.createElement('button'); b.type = 'button'; b.className = 'omg-ed-card'; b.setAttribute('data-value', o.value);

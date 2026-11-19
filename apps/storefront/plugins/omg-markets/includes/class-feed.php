@@ -266,6 +266,9 @@ final class OMG_Markets_Feed
             $region = '';
         }
         $type = (string) get_post_meta($parent ? $parent->get_id() : $p->get_id(), '_omg_product_type', true);
+        if (function_exists('omg_is_currency') && omg_is_currency($parent ? $parent->get_id() : $p->get_id())) {
+            $type = 'game_currency';
+        }
         if (strcasecmp($attr($p, 'type'), 'Gift') === 0) {
             $type = 'gift_link'; // a store gift link (e.g. Steam gift), not a key
         }

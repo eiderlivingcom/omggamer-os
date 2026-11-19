@@ -261,6 +261,9 @@ final class OMG_SEO
                 $t_plat = wc_get_product_terms($p->get_id(), 'pa_platform', ['fields' => 'names']);
                 $t_reg = wc_get_product_terms($p->get_id(), 'pa_region', ['fields' => 'names']);
                 $t_type = (string) get_post_meta($p->get_id(), '_omg_product_type', true) ?: 'game';
+                if (function_exists('omg_is_currency') && omg_is_currency($p->get_id())) {
+                    $t_type = 'game_currency';
+                }
                 if (strcasecmp((string) get_post_meta($p->get_id(), '_omg_listing_type', true), 'Gift') === 0) {
                     $t_type = 'gift_link';
                 }
