@@ -41,7 +41,17 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "additionalProperties": False,
                 "required": ["url", "alt"],
-                "properties": {"url": {"type": "string"}, "alt": {"type": "string"}},
+                "properties": {
+                    "url": {"type": "string"},
+                    "alt": {
+                        "type": "string",
+                        "description": (
+                            "SEO alt text, also used as the image's file name on the store: the game name, edition "
+                            "or year if known, platform and what the image shows, 5 to 12 words, e.g. 'American "
+                            "Truck Simulator 2026 PC Steam key cover art'. No file extensions or symbols."
+                        ),
+                    },
+                },
             },
         },
         "missing_information": {"type": "array", "items": {"type": "string"}},

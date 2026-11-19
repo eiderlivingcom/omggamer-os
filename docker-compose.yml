@@ -48,6 +48,8 @@ services:
     build: ./apps/api
     restart: unless-stopped
     environment: *api-env
+    volumes:
+      - mediastage:/data/media-stage  # images renamed for the store while a game is published (then deleted)
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -62,6 +64,8 @@ services:
     build: ./apps/api
     restart: unless-stopped
     environment: *api-env
+    volumes:
+      - mediastage:/data/media-stage
     command: ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "default,imports,ai,publish", "--concurrency", "4", "-l", "info"]
     depends_on:
       api: { condition: service_healthy }
@@ -111,6 +115,7 @@ services:
       postgres: { condition: service_healthy }
 
 volumes:
+  mediastage:
   pgdata:
   redisdata:
   backups:

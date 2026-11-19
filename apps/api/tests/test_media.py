@@ -122,3 +122,45 @@ async def test_media_api_and_store_payload(client: AsyncClient, make_user: MakeU
     missing = (await client.get("/api/v1/media/missing-covers")).json()
     assert all(row["product_id"] != str(pid) for row in missing)
     assert failed_id
+
+
+# ---- SEO image names, staged on OS while publishing ------------------------------------------------------
+
+
+async def test_stage_images_renames_and_clears(tmp_path, monkeypatch, client: AsyncClient) -> None:  # type: ignore[no-untyped-def]
+    from app.media import staging
+
+    monkeypatch.setenv("OMG_MEDIA_STAGE_DIR", str(tmp_path))
+    pid = uuid.uuid4()
+    imgs = [
+        {
+            "url": "https://static.kinguin.net/x/ats_logo_2_1_1.png",
+            "filename": "american-truck-simulator-2026-cover.png",
+        },
+        {
+            "url": "https://cdn.example/page.html",
+            "filename": "american-truck-simulator-2026-screenshot-1.jpg",
+        },
+    ]
+
+    def h(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=png(800, 600) if request.url.path.endswith(".png") else b"<html></html>"
+        )
+
+    out = await staging.stage_images(pid, imgs, transport=httpx.MockTransport(h))
+    assert out[0]["url"].endswith(f"/api/v1/files/media/{pid}/american-truck-simulator-2026-cover.png")
+    assert out[0]["source"] == imgs[0]["url"]
+    assert out[1]["url"] == imgs[1]["url"]  # not an image: the store gets the supplier URL
+    assert (tmp_path / str(pid) / "american-truck-simulator-2026-cover.png").is_file()
+
+    r = await client.get(f"/api/v1/files/media/{pid}/american-truck-simulator-2026-cover.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG"
+    assert (await client.get(f"/api/v1/files/media/{pid}/..%2F..%2Fetc%2Fpasswd")).status_code == 404
+    assert (await client.get("/api/v1/files/media/not-a-uuid/a.png")).status_code == 404
+
+    staging.clear(pid)
+    assert not (tmp_path / str(pid)).exists()
+    assert (
+        await client.get(f"/api/v1/files/media/{pid}/american-truck-simulator-2026-cover.png")
+    ).status_code == 404

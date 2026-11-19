@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, exists, func, or_, select
 
@@ -12,9 +13,11 @@ from app.core.deps import DB, require
 from app.core.errors import AppError
 from app.db.models import Product, ProductMedia, User
 from app.media.service import check_batch
+from app.media.staging import staged_file
 from app.modules.audit.service import record
 
 router = APIRouter(prefix="/media", tags=["media"])
+files_router = APIRouter(tags=["media"])
 
 
 class MediaRow(BaseModel):
@@ -245,3 +248,23 @@ async def check_now(body: CheckIn, db: DB, _: User = require("catalogue:write"))
     stats = await check_batch(db, limit=len(ids) if ids else 60, ids=ids or None)
     await db.commit()
     return stats
+
+
+TYPES = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
+
+
+@files_router.get("/files/media/{product_id}/{filename}", include_in_schema=False)
+async def staged_media(product_id: str, filename: str) -> FileResponse:
+    """A game's image under its SEO name, while the game is being published (public: the store fetches it)."""
+    path = staged_file(product_id, filename)
+    if path is None:
+        raise AppError(404, "not_found", "Image not found.")
+    return FileResponse(
+        path, media_type=TYPES[filename.rsplit(".", 1)[1]], headers={"Cache-Control": "no-store"}
+    )

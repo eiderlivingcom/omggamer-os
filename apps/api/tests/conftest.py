@@ -1,8 +1,10 @@
 """Tests run against a real PostgreSQL and Redis (TEST_DATABASE_URL / TEST_REDIS_URL)."""
 
 import os
+import tempfile
 from collections.abc import AsyncIterator, Awaitable, Callable
 
+os.environ.setdefault("OMG_MEDIA_STAGE_DIR", tempfile.mkdtemp(prefix="omg-media-stage-"))
 os.environ.setdefault("TEST_DATABASE_URL", "postgresql+asyncpg://postgres@127.0.0.1:55432/omg_test")
 os.environ.setdefault("TEST_REDIS_URL", "redis://127.0.0.1:56379/15")
 os.environ.update(

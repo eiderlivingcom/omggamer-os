@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
-RUN chmod +x docker/*.sh
+RUN chmod +x docker/*.sh && mkdir -p /data/media-stage && chown app:app /data/media-stage
 USER app
 EXPOSE 8000
 CMD ["docker/start-api.sh"]

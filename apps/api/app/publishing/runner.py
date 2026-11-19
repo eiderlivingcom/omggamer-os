@@ -35,6 +35,7 @@ from app.db.models import (
     SyncLog,
 )
 from app.db.models.pricing import VariantPrice
+from app.media import staging as media_staging
 from app.pricing.engine import PricingEngine
 from app.publishing.connector import ConnectorClient, ConnectorError
 from app.sync.service import mark_pushed
@@ -498,6 +499,19 @@ class Publisher:
         self.sm = async_sessionmaker(engine, expire_on_commit=False)
 
     async def run(self, item_id: uuid.UUID) -> PublishOutcome:
+        product_id: uuid.UUID | None = None
+        try:
+            async with self.sm() as db:
+                product_id = await db.scalar(
+                    select(PublishingQueueItem.product_id).where(PublishingQueueItem.id == item_id)
+                )
+            return await self._run(item_id)
+        finally:
+            # The store has fetched the renamed images (or the run failed): the copies on OS are removed.
+            if product_id is not None:
+                media_staging.clear(product_id)
+
+    async def _run(self, item_id: uuid.UUID) -> PublishOutcome:
         async with self.sm() as db:
             item = (
                 await db.execute(
@@ -581,6 +595,9 @@ class Publisher:
                     )
                     continue
 
+                if mapping is None or mapping.sync_status != "synced":
+                    # A new listing gets the images under their SEO names, served from OS for this run only.
+                    payload["images"] = await media_staging.stage_images(product.id, payload["images"])
                 try:
                     client = ConnectorClient(sf)
                 except ConnectorError as exc:
@@ -853,20 +870,35 @@ def image_seo(
     label = " ".join(x for x in (title, platform, kind) if x).strip()
     out: list[dict[str, str]] = []
     shot = 0
+    used: set[str] = set()
     for m in media:
         if m.media_type == "cover" and not any(o["role"] == "cover" for o in out):
             role, suffix = "cover", "cover"
         else:
             shot += 1
             role, suffix = "screenshot", f"screenshot {shot}"
+        ct = (getattr(m, "content_type", None) or "").lower()
         path = m.source_url.split("?")[0].lower()
-        ext = next((e for e in (".png", ".webp", ".gif", ".jpeg", ".jpg") if path.endswith(e)), ".jpg")
+        ext = next(
+            (e for e in (".png", ".webp", ".gif", ".jpeg", ".jpg") if path.endswith(e) or ct.endswith(e[1:])),
+            ".jpg",
+        )
+        alt = (ai_alt.get(m.source_url) or f"{label} {suffix}").strip()[:250]
+        # The file name is the alt text written as a file name
+        # ("american-truck-simulator-2026-pc-steam-key-cover").
+        base = slugify(alt, 110) or slugify(f"{label} {suffix}", 110) or "image"
+        name, n = base, 1
+        while name in used:
+            n += 1
+            name = f"{base}-{n}"
+        used.add(name)
         out.append(
             {
                 "url": m.source_url,
-                "alt": (ai_alt.get(m.source_url) or f"{label} {suffix}").strip()[:250],
+                "source": m.source_url,
+                "alt": alt,
                 "title": f"{label} {suffix}"[:250],
-                "filename": f"{slugify(f'{label} {suffix}', 120)}{ext}",
+                "filename": f"{name}{ext}",
                 "role": role,
             }
         )

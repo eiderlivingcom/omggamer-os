@@ -602,3 +602,48 @@ async def test_new_game_main_page_is_an_option_in_stock(
     assert (await publisher().run(queued[-1])).state == "done"
     assert store.products[str(pid)]["body"]["meta"]["listing_region"] == "Europe"
     assert f"{pid}~steam-global" in store.products
+
+
+async def test_new_listing_gets_seo_named_images_then_copies_are_removed(
+    client: AsyncClient,
+    make_user: MakeUser,
+    store: FakeStore,
+    queued: list[uuid.UUID],
+    tmp_path,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    from app.media import staging
+
+    monkeypatch.setenv("OMG_MEDIA_STAGE_DIR", str(tmp_path))
+    seen: list[str] = []
+
+    async def fake_download(_client: Any, url: str, dest: Any) -> bool:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"\x89PNG fake")
+        seen.append(dest.name)
+        return True
+
+    monkeypatch.setattr(staging, "_download", fake_download)
+    await make_user()
+    await login(client)
+    pid = await seed()
+    async with get_sessionmaker()() as db:
+        c = (await db.execute(select(ProductContent))).scalar_one()
+        c.image_alt_text = {"https://cdn.example/7.jpg": "Hades 2026 PC Steam key cover art"}
+        await db.commit()
+    await connect(client, store)
+    await client.post(
+        "/api/v1/catalogue/products/bulk", json={"action": "publish", "product_ids": [str(pid)]}
+    )
+    assert (await publisher().run(queued[-1])).state == "done"
+
+    images = store.products[str(pid)]["body"]["images"]
+    first = images[0]
+    assert first["filename"] == "hades-2026-pc-steam-key-cover-art.jpg"
+    assert first["url"].endswith(f"/api/v1/files/media/{pid}/hades-2026-pc-steam-key-cover-art.jpg")
+    assert (
+        first["source"] == "https://cdn.example/7.jpg" and first["alt"] == "Hades 2026 PC Steam key cover art"
+    )
+    assert "hades-2026-pc-steam-key-cover-art.jpg" in seen
+    # Published: the renamed copies are gone from OS.
+    assert not (tmp_path / str(pid)).exists()

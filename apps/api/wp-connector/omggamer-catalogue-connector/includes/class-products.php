@@ -662,7 +662,9 @@ class OMG_Connector_Products
             if (!$url || !preg_match('#^https://#i', $url)) {
                 continue;
             }
-            $att = $this->find_attachment($url);
+            // The supplier's image is the key (the URL may be a temporary renamed copy on OMGGamer OS).
+            $source = esc_url_raw(is_array($img) ? ($img['source'] ?? '') : '') ?: $url;
+            $att = $this->find_attachment($source) ?: ($source !== $url ? $this->find_attachment($url) : 0);
             if (!$att) {
                 $tmp = download_url($url, 30);
                 if (is_wp_error($tmp)) {
@@ -681,7 +683,7 @@ class OMG_Connector_Products
                     $this->warnings[] = "Image not saved ({$url}): " . $att->get_error_message();
                     continue;
                 }
-                update_post_meta($att, '_omg_source_url', $url);
+                update_post_meta($att, '_omg_source_url', $source);
             }
             if (is_array($img) && !empty($img['alt'])) {
                 update_post_meta($att, '_wp_attachment_image_alt', sanitize_text_field($img['alt']));
