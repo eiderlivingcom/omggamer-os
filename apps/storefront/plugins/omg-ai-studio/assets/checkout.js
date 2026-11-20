@@ -54,7 +54,7 @@
     if (!force && key === last) { return; } last = key;
     var t = c.totals || {}, items = c.items, count = pick(c, 'itemsCount', 'items_count') || 0;
     var hasPro = items.some(function (i) { return i.id === C.proId; });
-    var proSave = 0;
+    var proSave = 0, cmu = pick(t, 'currency_minor_unit', 'currencyMinorUnit'); cmu = cmu == null ? 2 : cmu;
     items.forEach(function (i) {
       var pp = C.pro && C.pro[i.id]; if (pp == null) { return; }
       var mu = pick(i.prices || {}, 'currency_minor_unit') || 2, now = parseInt(pick(i.prices || {}, 'price'), 10) / Math.pow(10, mu);
@@ -64,7 +64,7 @@
     if (!C.proMember) {
       h += '<div class="omgx-pro' + (hasPro ? ' is-on' : '') + '"><div class="hd"><b>Choose your <span class="pro">PRO</span> benefit</b>' + (hasPro ? '<span class="tag">Added</span>' : '<span class="tag hot">Best value</span>') + '</div>' +
         '<div class="seg" role="radiogroup" aria-label="PRO membership"><button type="button" role="radio" aria-checked="' + (hasPro ? 'false' : 'true') + '" class="' + (hasPro ? '' : 'is-on') + '" data-omgx-pro="off">No <span class="pro">PRO</span></button><button type="button" role="radio" aria-checked="' + (hasPro ? 'true' : 'false') + '" class="' + (hasPro ? 'is-on' : '') + '" data-omgx-pro="on"><span class="pro">PRO</span></button></div>' +
-        '<p class="sv">' + (hasPro ? 'OMG PRO is in your order: ' + (C.proFirst ? money(Math.round(C.proFirst * 100)) + ' for the first month, then ' : '') + money(Math.round((C.proMonthly || C.proPrice || 4.99) * 100)) + '/month, cancel anytime. Promo codes do not apply to PRO.' : 'PRO members get member prices, up to <b>' + money(Math.round(proSave * 100)) + '</b> less on items like these. ' + (C.proFirst ? 'First month ' + money(Math.round(C.proFirst * 100)) + ', then ' : '') + money(Math.round((C.proMonthly || C.proPrice || 4.99) * 100)) + '/month, cancel anytime.') + ' <a href="' + esc(C.proUrl) + '" target="_blank" rel="noopener">How PRO works</a></p></div>';
+        '<p class="sv">' + (hasPro ? 'OMG PRO is in your order: ' + (C.proFirst ? money(Math.round(C.proFirst * Math.pow(10, cmu)), t) + ' for the first month, then ' : '') + money(Math.round((C.proMonthly || C.proPrice || 4.99) * Math.pow(10, cmu)), t) + '/month, cancel anytime. Promo codes do not apply to PRO.' : 'PRO members get member prices, up to <b>' + money(Math.round(proSave * Math.pow(10, cmu)), t) + '</b> less on items like these. ' + (C.proFirst ? 'First month ' + money(Math.round(C.proFirst * Math.pow(10, cmu)), t) + ', then ' : '') + money(Math.round((C.proMonthly || C.proPrice || 4.99) * Math.pow(10, cmu)), t) + '/month, cancel anytime.') + ' <a href="' + esc(C.proUrl) + '" target="_blank" rel="noopener">How PRO works</a></p></div>';
     }
     h += '<ul class="omgx-items">';
     items.forEach(function (i) {
