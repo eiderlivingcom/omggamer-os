@@ -57,7 +57,7 @@ final class OMG_Pro_Prices
     /** Replace typed USD amounts ("$6.99", "$0.99") in a piece of HTML. */
     private static function amounts(string $html): string
     {
-        return (string) preg_replace_callback('/\$(\d+(?:\.\d{1,2})?)(?![\d.])/', static fn ($m) => self::money((float) $m[1]), $html);
+        return (string) preg_replace_callback('/\$(\d+(?:\.\d{1,2})?)(?!\d|\.\d)/', static fn ($m) => self::money((float) $m[1]), $html);
     }
 
     public static function product_page(string $html): string
