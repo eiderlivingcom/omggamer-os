@@ -35,12 +35,23 @@ final class OMG_SEO
     private static $ctx = null;
     private static $stats = [];
 
+    /** Taxonomies with little unique content: not indexed and left out of the sitemap. */
+    private const THIN_TAX = ['pa_quantity', 'pa_languages'];
+
     public static function init(): void
     {
+        // Rank Math prints every head tag (title, description, canonical, robots, Open Graph, Twitter, JSON-LD).
+        // This plugin only supplies the texts, through Rank Math's filters, so each tag appears once.
         add_action('template_redirect', [__CLASS__, 'takeover'], 20);
-        add_filter('pre_get_document_title', [__CLASS__, 'title'], 99);
-        add_action('wp_head', [__CLASS__, 'head'], 1);
-        add_filter('wp_robots', [__CLASS__, 'robots'], 20);
+        add_filter('rank_math/frontend/title', [__CLASS__, 'title'], 20);
+        add_filter('rank_math/frontend/description', [__CLASS__, 'description'], 20);
+        add_filter('rank_math/opengraph/facebook/og_title', [__CLASS__, 'title'], 20);
+        add_filter('rank_math/opengraph/twitter/twitter_title', [__CLASS__, 'title'], 20);
+        add_filter('rank_math/opengraph/facebook/og_description', [__CLASS__, 'description'], 20);
+        add_filter('rank_math/opengraph/twitter/twitter_description', [__CLASS__, 'description'], 20);
+        add_filter('rank_math/frontend/robots', [__CLASS__, 'robots'], 20);
+        add_filter('rank_math/sitemap/exclude_post_type', [__CLASS__, 'sitemap_post_type'], 20, 2);
+        add_filter('rank_math/sitemap/exclude_taxonomy', [__CLASS__, 'sitemap_taxonomy'], 20, 2);
         add_filter('bricks/frontend/render_data', [__CLASS__, 'archive_block'], 40, 3);
         add_filter('woocommerce_get_breadcrumb', [__CLASS__, 'breadcrumb'], 20);
         add_action('admin_init', [__CLASS__, 'term_fields']);
@@ -59,7 +70,7 @@ final class OMG_SEO
         return function_exists('is_product_taxonomy') && (is_product_taxonomy() || is_shop());
     }
 
-    /** Our SEO tags replace the theme's and the Product Studio's (no duplicates). */
+    /** Bricks' and the Product Studio's own SEO tags are removed: Rank Math is the only one (no duplicates). */
     public static function takeover(): void
     {
         if (!self::front()) {
@@ -84,7 +95,6 @@ final class OMG_SEO
                 }
             }
         }
-        remove_action('wp_head', 'rel_canonical');
     }
 
     private static function term()
@@ -267,6 +277,10 @@ final class OMG_SEO
                 if (strcasecmp((string) get_post_meta($p->get_id(), '_omg_listing_type', true), 'Gift') === 0) {
                     $t_type = 'gift_link';
                 }
+                $physical = self::physical($p->get_id());
+                if ($physical) {
+                    $t_type = $physical; // hardware / accessory: no key wording
+                }
                 $full = function_exists('omg_listing_title') ? omg_listing_title($name, $t_plat, $t_reg, $t_type) : 'Buy ' . $name;
                 $own_t = (string) preg_replace('/\s*[–-]\s*(Buy for\s*)?[$€£]\s?[\d.,]+/u', '', $own_t); // no prices
                 $c['title'] = $own_t ?: self::fit([
@@ -275,14 +289,19 @@ final class OMG_SEO
                     $name . ' | ' . $b,
                     $name,
                 ], 110); // full key-store titles run past 66 characters
-                $c['desc'] = $own_d ?: sprintf(
+                $c['desc'] = $own_d ?: ($physical ? sprintf(
+                    'Buy %s%s on %s. Secure checkout, buyer protection and 24/7 support.',
+                    $name,
+                    $price ? ' from ' . self::money($price) : '',
+                    $b
+                ) : sprintf(
                     'Buy %s%s%s on %s. %sInstant digital delivery, secure checkout, buyer protection and 24/7 support.',
                     $name,
                     $plat ? ' for ' . $plat[0] : '',
                     $price ? ' from ' . self::money($price) : '',
                     $b,
                     $reg ? 'Region: ' . self::list_text($reg) . '. ' : ''
-                );
+                ));
                 $c['keys'] = array_filter([
                     $name, 'buy ' . $name, $name . ' key', $name . ' cheap', $plat ? $name . ' ' . $plat[0] : '',
                     $plat ? $plat[0] . ' game key' : '', ...array_map(static fn ($g) => $g . ' game', $gen),
@@ -409,71 +428,47 @@ final class OMG_SEO
         return $c['title'] ?: $title;
     }
 
-    public static function robots(array $robots): array
+    public static function description($desc)
     {
         if (!self::front()) {
+            return $desc;
+        }
+        $c = self::ctx();
+        return $c['desc'] ?: $desc;
+    }
+
+    /** Hardware or accessory (physical goods), else ''. */
+    public static function physical(int $product_id): string
+    {
+        $k = class_exists('OMG_PS') ? (string) OMG_PS::kind($product_id) : (string) get_post_meta($product_id, '_omg_kind', true);
+        return in_array($k, ['hardware', 'accessory'], true) ? $k : '';
+    }
+
+    /** Rank Math robots ('index' => 'index' | 'noindex', 'follow' => ...). */
+    public static function robots($robots)
+    {
+        if (!self::front() || !is_array($robots)) {
             return $robots;
         }
-        // Filtered / sorted listings and search results: keep crawlable, not indexed.
+        // Filtered / sorted listings, search results and thin attribute archives: crawlable, not indexed.
         $noise = array_diff(array_keys($_GET), ['market', 'currency', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid']);
-        if (is_search() || (self::is_archive() && $noise)) {
-            $robots['noindex'] = true;
-            $robots['follow'] = true;
-        } elseif (!isset($robots['noindex'])) {
-            $robots['max-image-preview'] = 'large';
+        $thin = is_tax(self::THIN_TAX);
+        if (is_search() || $thin || (self::is_archive() && $noise)) {
+            $robots['index'] = 'noindex';
+            $robots['follow'] = 'follow';
         }
         return $robots;
     }
 
-    public static function head(): void
+    /** Bricks templates are building blocks, not pages: keep them out of the sitemap. */
+    public static function sitemap_post_type($exclude, $type)
     {
-        if (!self::front()) {
-            return;
-        }
-        $c = self::ctx();
-        $e = static fn ($v) => esc_attr($v);
-        echo "\n<!-- OMGGamer SEO -->\n";
-        if ($c['desc']) {
-            echo '<meta name="description" content="' . $e($c['desc']) . '">' . "\n";
-        }
-        if ($c['keys']) {
-            echo '<meta name="keywords" content="' . $e(implode(', ', $c['keys'])) . '">' . "\n";
-        }
-        if ($c['url'] && !is_wp_error($c['url'])) {
-            echo '<link rel="canonical" href="' . esc_url($c['url']) . '">' . "\n";
-        }
-        $og = [
-            'og:site_name' => self::BRAND,
-            'og:locale' => str_replace('-', '_', get_bloginfo('language')),
-            'og:type' => $c['type'],
-            'og:title' => $c['title'],
-            'og:description' => $c['desc'],
-            'og:url' => is_wp_error($c['url']) ? '' : $c['url'],
-            'og:image' => $c['image'],
-        ];
-        foreach ($og as $k => $v) {
-            if ($v) {
-                echo '<meta property="' . $k . '" content="' . ($k === 'og:url' || $k === 'og:image' ? esc_url($v) : $e($v)) . '">' . "\n";
-            }
-        }
-        echo '<meta name="twitter:card" content="' . ($c['image'] ? 'summary_large_image' : 'summary') . '">' . "\n";
-        echo '<meta name="twitter:title" content="' . $e($c['title']) . '">' . "\n";
-        if ($c['desc']) {
-            echo '<meta name="twitter:description" content="' . $e($c['desc']) . '">' . "\n";
-        }
-        if ($c['image']) {
-            echo '<meta name="twitter:image" content="' . esc_url($c['image']) . '">' . "\n";
-        }
-        if (is_front_page()) {
-            $org = [
-                '@context' => 'https://schema.org',
-                '@type' => 'Organization',
-                'name' => self::BRAND,
-                'url' => home_url('/'),
-                'logo' => content_url('uploads/omg-brand/favicon-192.png'),
-            ];
-            echo '<script type="application/ld+json">' . wp_json_encode($org, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "</script>\n";
-        }
+        return $type === 'bricks_template' ? true : $exclude;
+    }
+
+    public static function sitemap_taxonomy($exclude, $type)
+    {
+        return in_array($type, self::THIN_TAX, true) ? true : $exclude;
     }
 
     public static function breadcrumb(array $crumbs): array
