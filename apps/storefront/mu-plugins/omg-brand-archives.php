@@ -22,6 +22,22 @@ final class OMG_Brand_Archives
         add_filter('bricks/active_templates', [__CLASS__, 'template'], 30);
         add_filter('woocommerce_attribute_label', [__CLASS__, 'label'], 20, 3);
         add_filter('bricks/frontend/render_data', [__CLASS__, 'spec_links'], 45);
+        add_filter('bricks/frontend/render_data', [__CLASS__, 'kicker'], 46);
+    }
+
+    /** The archive hero's small label reads "Publisher" / "Developer" instead of the template's "Collections". */
+    public static function kicker($html)
+    {
+        if (!is_string($html) || strpos($html, 'omg-ar-kicker') === false || !is_tax(self::TAXONOMIES)) {
+            return $html;
+        }
+        $label = is_tax('pa_publishers') ? 'Publisher' : 'Developer';
+        $html = (string) preg_replace('#(<span[^>]*class="[^"]*omg-ar-kicker[^"]*"[^>]*>)[^<]*(</span>)#', '${1}' . $label . '$2', $html, 1);
+        // The template's own script relabels the kicker after load: keep ours.
+        $js = '<script id="omg-brand-kicker">(function(){var k=document.querySelector(".omg-ar-kicker");if(!k)return;var t=' . wp_json_encode($label) . ';'
+            . 'var fix=function(){if(k.textContent!==t)k.textContent=t;};fix();'
+            . 'if(window.MutationObserver){var o=new MutationObserver(fix);o.observe(k,{childList:true,characterData:true,subtree:true});setTimeout(function(){o.disconnect();},8000);}})();</script>';
+        return $html . $js;
     }
 
     /** Product Specifications: each publisher and developer name links to its archive page. */
