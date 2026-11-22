@@ -283,12 +283,8 @@ final class OMG_SEO
                 }
                 $full = function_exists('omg_listing_title') ? omg_listing_title($name, $t_plat, $t_reg, $t_type) : 'Buy ' . $name;
                 $own_t = (string) preg_replace('/\s*[–-]\s*(Buy for\s*)?[$€£]\s?[\d.,]+/u', '', $own_t); // no prices
-                $c['title'] = $own_t ?: self::fit([
-                    $full . ' | ' . $b,
-                    $full,
-                    $name . ' | ' . $b,
-                    $name,
-                ], 110); // full key-store titles run past 66 characters
+                // Product pages: the listing title only, never cut and without the brand suffix.
+                $c['title'] = $own_t ?: $full;
                 $c['desc'] = $own_d ?: ($physical ? sprintf(
                     'Buy %s%s on %s. Secure checkout, buyer protection and 24/7 support.',
                     $name,
@@ -401,7 +397,7 @@ final class OMG_SEO
             $c['url'] = get_permalink($id);
             $c['image'] = (string) get_the_post_thumbnail_url($id, 'large');
         }
-        $c['title'] = self::clean($c['title'], 70);
+        $c['title'] = $c['type'] === 'product' ? self::clean($c['title']) : self::clean($c['title'], 70);
         $c['desc'] = self::clean($c['desc'], 160);
         $c['keys'] = array_slice(array_values(array_unique(array_filter(array_map(static fn ($k) => mb_strtolower(self::clean((string) $k)), $c['keys'])))), 0, 12);
         return self::$ctx = $c;
