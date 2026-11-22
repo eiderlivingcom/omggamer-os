@@ -21,6 +21,39 @@ final class OMG_Brand_Archives
     {
         add_filter('bricks/active_templates', [__CLASS__, 'template'], 30);
         add_filter('woocommerce_attribute_label', [__CLASS__, 'label'], 20, 3);
+        add_filter('bricks/frontend/render_data', [__CLASS__, 'spec_links'], 45);
+    }
+
+    /** Product Specifications: each publisher and developer name links to its archive page. */
+    public static function spec_links($html)
+    {
+        if (!is_string($html) || strpos($html, 'omg-sp-row') === false || !function_exists('is_product') || !is_product()) {
+            return $html;
+        }
+        $id = (int) get_queried_object_id();
+        foreach (['publisher' => 'pa_publishers', 'developer' => 'pa_developers'] as $key => $tax) {
+            $terms = taxonomy_exists($tax) ? wp_get_post_terms($id, $tax) : [];
+            if (is_wp_error($terms) || !$terms) {
+                continue;
+            }
+            $links = [];
+            foreach ($terms as $t) {
+                $url = get_term_link($t);
+                if (!is_wp_error($url)) {
+                    $links[] = '<a href="' . esc_url($url) . '">' . esc_html(html_entity_decode($t->name, ENT_QUOTES)) . '</a>';
+                }
+            }
+            if (!$links) {
+                continue;
+            }
+            $html = (string) preg_replace_callback(
+                '~(<div[^>]*\bomg-sp-row\b[^>]*data-k="' . $key . '"[^>]*>.*?<span[^>]*\bomg-sp-v\b[^>]*>)(.*?)(</span>)~s',
+                static fn ($m) => $m[1] . implode(', ', $links) . $m[3],
+                $html,
+                1
+            );
+        }
+        return $html;
     }
 
     private static function template_id(): int
