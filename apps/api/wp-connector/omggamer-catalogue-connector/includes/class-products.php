@@ -479,12 +479,26 @@ class OMG_Connector_Products
     }
 
     /** Use the store's global attribute (pa_*) when one exists with that name, otherwise a product-level one. */
+    /** Store attribute slugs whose name differs from the OS field (OS "Publisher" → store "publishers"). */
+    private const ATTRIBUTE_ALIASES = ['publisher' => 'publishers', 'developer' => 'developers', 'genre' => 'genres'];
+
+    private function attribute_slug($name, $variation = false)
+    {
+        $slug = sanitize_title($name);
+        // Only display attributes are aliased: option attributes keep their slug so existing variations still match.
+        if (!$variation && isset(self::ATTRIBUTE_ALIASES[$slug]) && wc_attribute_taxonomy_id_by_name(self::ATTRIBUTE_ALIASES[$slug])) {
+            return self::ATTRIBUTE_ALIASES[$slug];
+        }
+        return $slug;
+    }
+
     private function attribute_object($name, array $values, $position, $variation, $visible = true)
     {
         $attr = new WC_Product_Attribute();
-        $tax_id = wc_attribute_taxonomy_id_by_name(sanitize_title($name));
+        $slug = $this->attribute_slug($name, $variation);
+        $tax_id = wc_attribute_taxonomy_id_by_name($slug);
         if ($tax_id) {
-            $taxonomy = wc_attribute_taxonomy_name(sanitize_title($name));
+            $taxonomy = wc_attribute_taxonomy_name($slug);
             $term_ids = [];
             foreach ($values as $value) {
                 $term = term_exists($value, $taxonomy);

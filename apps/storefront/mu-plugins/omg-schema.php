@@ -173,20 +173,11 @@ final class OMG_Schema
             $node['sku'] = $sku;
         }
 
-        // Brand: the hardware brand, else the publisher, else the developer.
-        $brand = '';
-        foreach ($physical ? ['product_brand'] : ['pa_publishers', 'pa_developers', 'product_brand'] as $tax) {
-            if (!taxonomy_exists($tax)) {
-                continue;
-            }
-            $names = wp_get_post_terms($id, $tax, ['fields' => 'names']);
-            if (!is_wp_error($names) && $names) {
-                $brand = trim(html_entity_decode((string) $names[0], ENT_QUOTES));
-                break;
-            }
-        }
-        if ($brand !== '' && strcasecmp($brand, 'N/A') !== 0) {
+        $brand = self::brand($p, $physical);
+        if ($brand !== '') {
             $node['brand'] = ['@type' => 'Brand', 'name' => $brand];
+        } else {
+            unset($node['brand']);
         }
 
         if (empty($node['image'])) {
@@ -211,6 +202,84 @@ final class OMG_Schema
             unset($node['aggregateRating']);
         }
         return $node;
+    }
+
+    /** Gift cards and game currency are issued by the platform or game company. */
+    private const ISSUERS = [
+        '/\brobux\b|\broblox\b/i' => 'Roblox',
+        '/v-?bucks|fortnite/i' => 'Epic Games',
+        '/\bsteam\b/i' => 'Valve',
+        '/playstation|\bpsn\b|\bps\s?plus\b/i' => 'Sony',
+        '/\bxbox\b|game pass|microsoft/i' => 'Microsoft',
+        '/nintendo|\beshop\b/i' => 'Nintendo',
+        '/apple|itunes|app store/i' => 'Apple',
+        '/google play/i' => 'Google',
+        '/razer gold/i' => 'Razer',
+        '/valorant|league of legends|riot/i' => 'Riot Games',
+        '/battle\.?net|blizzard/i' => 'Blizzard Entertainment',
+        '/\bea\b|origin|ea app|apex coins/i' => 'Electronic Arts',
+        '/minecraft|minecoins/i' => 'Mojang',
+        '/spotify/i' => 'Spotify',
+        '/netflix/i' => 'Netflix',
+    ];
+
+    /** One name per company, the way shoppers and other stores write it. */
+    private const BRAND_NAMES = [
+        'ubisoft entertainment' => 'Ubisoft',
+        'electronic arts inc' => 'Electronic Arts',
+        'ea' => 'Electronic Arts',
+        'bandai namco entertainment' => 'Bandai Namco',
+        'square enix' => 'Square Enix',
+        'take-two interactive' => 'Take-Two Interactive',
+        'warner bros. interactive entertainment' => 'Warner Bros. Games',
+        'warner bros. games' => 'Warner Bros. Games',
+        'sega' => 'SEGA',
+    ];
+
+    private static function brand_name(string $name): string
+    {
+        $name = trim(html_entity_decode($name, ENT_QUOTES));
+        $name = trim((string) preg_split('/\s*[,;\/]\s*/', $name)[0]); // "Ubisoft, Ubisoft Montreal" → "Ubisoft"
+        $name = trim((string) preg_replace('/,?\s+(inc|ltd|llc|gmbh|s\.?a|co|corp|corporation|limited|plc|ab|oy|srl|s\.?r\.?o)\.?$/i', '', $name));
+        if ($name === '' || in_array(strtolower($name), ['n/a', 'na', 'unknown', 'none', '-'], true)) {
+            return '';
+        }
+        return self::BRAND_NAMES[strtolower($name)] ?? $name;
+    }
+
+    /** Brand: the hardware brand; for games the publisher, else the developer; for gift cards the issuer. */
+    public static function brand(WC_Product $p, string $physical = ''): string
+    {
+        $id = $p->get_id();
+        $sources = $physical ? ['product_brand'] : ['pa_publishers', 'pa_developers', 'product_brand'];
+        foreach ($sources as $tax) {
+            if (!taxonomy_exists($tax)) {
+                continue;
+            }
+            $names = wp_get_post_terms($id, $tax, ['fields' => 'names']);
+            if (!is_wp_error($names) && $names && ($b = self::brand_name((string) $names[0])) !== '') {
+                return $b;
+            }
+        }
+        if (!$physical) {
+            // Older listings may still carry them as plain text attributes.
+            foreach (['Publisher', 'Developer'] as $label) {
+                if (($b = self::brand_name((string) $p->get_attribute($label))) !== '') {
+                    return $b;
+                }
+            }
+            $slugs = wp_get_post_terms($id, 'product_cat', ['fields' => 'slugs']);
+            $is_card = (function_exists('omg_is_currency') && omg_is_currency($id))
+                || (is_array($slugs) && array_filter($slugs, static fn ($s) => (bool) preg_match('/gift|currenc|top-?up/', (string) $s)));
+            if ($is_card) {
+                foreach (self::ISSUERS as $re => $issuer) {
+                    if (preg_match($re, $p->get_name())) {
+                        return $issuer;
+                    }
+                }
+            }
+        }
+        return '';
     }
 
     /** The same trail WooCommerce shows on the page (Home › Collection › Product). */
