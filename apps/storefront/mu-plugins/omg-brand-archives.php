@@ -73,8 +73,10 @@ final class OMG_Brand_Archives
         }
         $id = self::template_id();
         if ($id) {
-            $active['content'] = $id;
-            $active['archive'] = $id;
+            // Bricks files product attribute archives under "wc_archive" (content type); set every slot it may read.
+            foreach (['content', 'archive', 'wc_archive'] as $slot) {
+                $active[$slot] = $id;
+            }
         }
         return $active;
     }
