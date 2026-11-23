@@ -19,6 +19,18 @@ export const NAV: NavItem[] = [
     ],
   },
   {
+    href: "/orders",
+    label: "Orders",
+    icon: "receipt",
+    perm: "orders:read",
+    sections: [
+      { label: "Customer orders", phase: 9 },
+      { label: "Supplier fulfilment", phase: 9 },
+      { label: "Failed orders", phase: 9 },
+      { label: "Refund management", phase: 9 },
+    ],
+  },
+  {
     href: "/catalogue",
     label: "Catalogue",
     icon: "box",
@@ -114,18 +126,6 @@ export const NAV: NavItem[] = [
     sections: [
       { label: "Home page sections", phase: 7 },
       { label: "Banners", phase: 7 },
-    ],
-  },
-  {
-    href: "/orders",
-    label: "Orders",
-    icon: "receipt",
-    perm: "orders:read",
-    sections: [
-      { label: "Customer orders", phase: 9 },
-      { label: "Supplier fulfilment", phase: 9 },
-      { label: "Failed orders", phase: 9 },
-      { label: "Refund management", phase: 9 },
     ],
   },
   {

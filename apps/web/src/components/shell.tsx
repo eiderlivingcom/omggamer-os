@@ -33,6 +33,28 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const nav = NAV.filter((n) => can(n.perm));
 
+  // Open orders (not yet fulfilled, refunded or cancelled) shown as a count next to Orders.
+  const canOrders = can("orders:read");
+  const [openOrders, setOpenOrders] = useState<{ total: number; attention: number } | null>(null);
+  useEffect(() => {
+    if (!canOrders) return;
+    let alive = true;
+    const load = () =>
+      api<{ counts: Record<string, number> }>("/orders/overview")
+        .then(({ counts }) => {
+          const c = (k: string) => counts[k] ?? 0;
+          const attention = c("needs_attention") + c("partially_fulfilled");
+          if (alive) setOpenOrders({ total: c("received") + c("processing") + c("awaiting_keys") + attention, attention });
+        })
+        .catch(() => undefined);
+    void load();
+    const t = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [canOrders, path]);
+
   return (
     <div className="min-h-dvh bg-ink-50 lg:grid lg:grid-cols-[248px_minmax(0,1fr)] lg:bg-[linear-gradient(to_right,#0c0b1a_248px,#f6f6fa_248px)]">
       <aside
@@ -66,6 +88,18 @@ export function Shell({ children }: { children: ReactNode }) {
                   >
                     <Icon name={n.icon} />
                     <span className="flex-1">{n.label}</span>
+                    {n.href === "/orders" && openOrders && openOrders.total > 0 && (
+                      <span
+                        className={cx(
+                          "grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-bold tabular-nums text-white",
+                          openOrders.attention > 0 ? "bg-rose-500" : "bg-brand-500",
+                        )}
+                        title={openOrders.attention > 0 ? `${openOrders.attention} need attention` : undefined}
+                      >
+                        {openOrders.total > 99 ? "99+" : openOrders.total}
+                        <span className="sr-only"> open orders</span>
+                      </span>
+                    )}
                     {!live && <span className="font-mono text-[10px] text-ink-500">P{Math.min(...n.sections.map((s) => s.phase))}</span>}
                   </Link>
                 </li>
