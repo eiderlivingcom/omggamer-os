@@ -144,6 +144,9 @@ final class OMG_Payment_Tests
     private static function err(array $body): string
     {
         $e = $body['error'] ?? [];
+        if (!$e && isset($body['status'])) {
+            return 'Stripe returned payment status "' . $body['status'] . '"' . (!empty($body['next_action']['type']) ? ' with next step "' . $body['next_action']['type'] . '"' : '') . '.';
+        }
         return trim((string) ($e['message'] ?? 'Unknown error') . (!empty($e['code']) ? ' (' . $e['code'] . ')' : ''));
     }
 
