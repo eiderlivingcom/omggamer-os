@@ -24,6 +24,15 @@ final class OMG_Auth_Modal
         add_action('wp_ajax_nopriv_omg_auth', [__CLASS__, 'submit']);
         add_action('wp_ajax_omg_auth', [__CLASS__, 'submit']);
         add_action('init', [__CLASS__, 'google_routes']);
+        // WooCommerce ties a logged-out visitor's nonces to their cart session. The first page view starts that
+        // session, so the login form's nonce no longer matched when posted and the login failed silently.
+        // Login / register / lost-password nonces do not depend on the cart session (as WordPress's own login).
+        add_filter('nonce_user_logged_out', [__CLASS__, 'auth_nonce_user'], 99, 2);
+    }
+
+    public static function auth_nonce_user($uid, $action = '')
+    {
+        return in_array($action, ['woocommerce-login', 'woocommerce-register', 'woocommerce-lost_password', 'lost_password'], true) ? 0 : $uid;
     }
 
     private static function key(string $name): string
