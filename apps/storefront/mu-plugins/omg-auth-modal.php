@@ -206,7 +206,23 @@ final class OMG_Auth_Modal
             $fail('Google could not confirm your email.');
         }
         $email = sanitize_email($info['email']);
+        // Logged in already ("Link Google" in Account → Linked accounts): link it to this account, never switch accounts.
+        if (is_user_logged_in()) {
+            $owner = get_users(['meta_key' => '_omg_google_email', 'meta_value' => $email, 'fields' => 'ids', 'number' => 1]);
+            $other = get_user_by('email', $email);
+            if (($owner && (int) $owner[0] !== get_current_user_id()) || ($other && $other->ID !== get_current_user_id())) {
+                $fail('That Google account belongs to another OMGGamer account.');
+            }
+            update_user_meta(get_current_user_id(), '_omg_google_email', $email);
+            update_user_meta(get_current_user_id(), '_omg_google_sub', sanitize_text_field((string) ($info['sub'] ?? '')));
+            wp_safe_redirect($back);
+            exit;
+        }
         $user = get_user_by('email', $email);
+        if (!$user) {
+            $linked = get_users(['meta_key' => '_omg_google_email', 'meta_value' => $email, 'number' => 1]);
+            $user = $linked ? $linked[0] : false;
+        }
         if (!$user) {
             if ('yes' !== get_option('woocommerce_enable_myaccount_registration') || !function_exists('wc_create_new_customer')) {
                 $fail('Sign-ups are closed right now.');
@@ -220,6 +236,8 @@ final class OMG_Auth_Modal
             }
             $user = get_user_by('id', $id);
         }
+        update_user_meta($user->ID, '_omg_google_email', $email);
+        update_user_meta($user->ID, '_omg_google_sub', sanitize_text_field((string) ($info['sub'] ?? '')));
         wp_set_current_user($user->ID);
         wp_set_auth_cookie($user->ID, true, is_ssl());
         do_action('wp_login', $user->user_login, $user);
@@ -242,7 +260,7 @@ final class OMG_Auth_Modal
             'turnstile' => self::turnstile_on() ? self::key('OMG_TURNSTILE_SITE_KEY') : '',
             'register' => 'yes' === get_option('woocommerce_enable_myaccount_registration'),
             'lost' => function_exists('wc_lostpassword_url') ? wc_lostpassword_url() : wp_lostpassword_url(),
-            'account' => function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/'),
+            'account' => function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/account/'),
             'error' => isset($_GET['omg_auth_error']) ? sanitize_text_field(wp_unslash($_GET['omg_auth_error'])) : '',
         ];
         ?>
@@ -358,7 +376,7 @@ html.omg-au-lock,html.omg-au-lock body{overflow:hidden}
       var ts = ov.querySelector('[name="cf-turnstile-response"]'); if (ts) d['cf-turnstile-response'] = ts.value;
       return post(d);
     }).then(function(r){
-      if (r && r.success) { btn.textContent = 'Done'; if (/\/my-account\/?/.test(location.pathname)) location.href = C.account; else location.reload(); return; }
+      if (r && r.success) { btn.textContent = 'Done'; if (/\/(my-)?account\/?/.test(location.pathname)) location.href = C.account; else location.reload(); return; }
       err(r && r.data && r.data.message ? r.data.message : 'Something went wrong. Please try again.', r && r.data ? r.data.field : '');
       if (tsId !== null && window.turnstile) window.turnstile.reset(tsId);
       btn.disabled = false; btn.textContent = label;
