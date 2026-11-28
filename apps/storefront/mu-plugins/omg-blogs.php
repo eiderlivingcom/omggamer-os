@@ -84,7 +84,7 @@ final class OMG_Blogs
         if (!$blog || !$product_id) {
             return [];
         }
-        $key = 'omg_blog_rel_v3_' . $product_id;
+        $key = 'omg_blog_rel_v4_' . $product_id;
         $cached = get_transient($key);
         if (is_array($cached)) {
             return $cached;
@@ -97,23 +97,31 @@ final class OMG_Blogs
                 $tiers[] = [$series];
             }
         }
-        $tiers[] = self::term_names($product_id, 'pa_genres', 3);
+        $genre_tier = self::term_names($product_id, 'pa_genres', 3);
+        $tiers[] = $genre_tier;
         $tiers[] = array_merge(self::term_names($product_id, 'pa_publishers', 1), self::term_names($product_id, 'pa_developers', 1));
         $platform_tier = self::term_names($product_id, 'pa_platform', 1);
 
         switch_to_blog($blog);
         $out = [];
         $seen = [];
-        $find = static function (array $phrases) use (&$out, &$seen): void {
+        // $in_title: broad words (genre, platform) only count when the title has them as a whole word.
+        $find = static function (array $phrases, bool $in_title = false) use (&$out, &$seen): void {
             foreach ($phrases as $phrase) {
                 $phrase = trim((string) $phrase);
                 if (count($out) >= 4 || mb_strlen($phrase) < 3) {
                     continue;
                 }
                 // Whole-phrase search ("Euro Truck Simulator", not any of its words); titles rank first.
-                $ids = get_posts(['s' => $phrase, 'sentence' => true, 'post_type' => 'post', 'post_status' => 'publish', 'numberposts' => 4, 'fields' => 'ids', 'orderby' => 'relevance']);
-                foreach ($ids as $id) {
+                $q = ['s' => $phrase, 'sentence' => true, 'post_type' => 'post', 'post_status' => 'publish', 'numberposts' => $in_title ? 12 : 4, 'fields' => 'ids', 'orderby' => 'relevance'];
+                if ($in_title) {
+                    $q['search_columns'] = ['post_title'];
+                }
+                foreach (get_posts($q) as $id) {
                     if (count($out) >= 4 || isset($seen[$id])) {
+                        continue;
+                    }
+                    if ($in_title && !preg_match('/(?<![\\p{L}\\p{N}])' . preg_quote($phrase, '/') . '(?![\\p{L}\\p{N}])/iu', html_entity_decode(get_the_title($id), ENT_QUOTES))) {
                         continue;
                     }
                     $seen[$id] = 1;
@@ -126,11 +134,11 @@ final class OMG_Blogs
                 }
             }
         };
-        foreach ($tiers as $phrases) {
-            $find($phrases);
+        foreach ($tiers as $i => $phrases) {
+            $find($phrases, $phrases === $genre_tier);
         }
         if (!$out) {
-            $find($platform_tier); // the platform only when nothing more specific exists
+            $find($platform_tier, true); // the platform only when nothing more specific exists
         }
         restore_current_blog();
         set_transient($key, $out, 6 * HOUR_IN_SECONDS);
