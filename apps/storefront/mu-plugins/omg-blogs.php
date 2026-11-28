@@ -3,7 +3,8 @@
  * Plugin Name: OMGGamer blog links
  * Description: The blog lives at omggamer.com/blogs/ (site 2 of the network). /blog and anything under it redirect
  *              there (301), the footer "Blog" link points straight at it, and product pages show "From the blog":
- *              four articles from /blogs/ about the game (matched on its name), else the latest ones (image + title).
+ *              up to four articles from /blogs/ related to the product: the game, its series, publisher / developer,
+ *              genres, then platform. No related article: no section.
  * Version: 1.0.0
  */
 
@@ -43,42 +44,94 @@ final class OMG_Blogs
         }
     }
 
-    /** Up to 4 posts from the blog: about the game first, then the latest. Cached for 6 hours per product. */
-    private static function posts_for(string $title): array
+    /** "Euro Truck Simulator 2 (Latin America) (Steam) Gift" → "Euro Truck Simulator 2". */
+    private static function game_name(string $title): string
     {
-        $blog = self::blog_id();
-        if (!$blog) {
+        $n = html_entity_decode(wp_strip_all_tags($title), ENT_QUOTES);
+        $n = (string) preg_replace('/\s*[\(\[].*$/u', '', $n);                       // (Region) (Platform) ...
+        $n = (string) preg_replace('/\s+[-\x{2013}\x{2014}|]\s+.*$/u', '', $n);      // " – Digital Key", " - Steam"
+        $n = (string) preg_replace('/\b(pc|steam|xbox( one| series x\|?s)?|playstation ?[45]?|ps[45]|nintendo( switch)?|switch|epic games|gog|ea app|ubisoft connect|microsoft store|ms store)\b.*$/i', '', $n);
+        $n = (string) preg_replace('/\b(cd )?key|account|gift|altergift|activation|global|europe|or mystery\b.*$/i', '', $n);
+        $n = (string) preg_replace('/\b(gold|deluxe|ultimate|premium|standard|complete|definitive|goty|game of the year|digital|collector\'?s|enhanced|anniversary)( edition)?\b.*$/i', '', $n);
+        return trim($n, " \t-–—:|,");
+    }
+
+    /** The series: the name before a subtitle or sequel number ("Assetto Corsa Rally" stays, "Fallout 4" → "Fallout"). */
+    private static function series(string $name): string
+    {
+        $s = trim((string) preg_split('/\s*[:\x{2013}\x{2014}]\s*/u', $name)[0]);
+        $s = trim((string) preg_replace('/\s+(\d+|[IVX]{1,4})$/u', '', $s));
+        return mb_strlen($s) >= 4 && strcasecmp($s, $name) !== 0 ? $s : '';
+    }
+
+    private static function term_names(int $product_id, string $tax, int $n = 3): array
+    {
+        if (!taxonomy_exists($tax)) {
             return [];
         }
-        $key = 'omg_blog_posts_' . md5($title);
+        $t = wp_get_post_terms($product_id, $tax, ['fields' => 'names']);
+        return is_wp_error($t) ? [] : array_slice(array_map(static fn ($x) => html_entity_decode((string) $x, ENT_QUOTES), $t), 0, $n);
+    }
+
+    /**
+     * Up to 4 blog posts related to the product, most specific first: the game, its series, its publisher /
+     * developer, its genres, and only then its platform. Nothing related → no section (never unrelated posts).
+     * Cached for 6 hours per product.
+     */
+    private static function posts_for(int $product_id): array
+    {
+        $blog = self::blog_id();
+        if (!$blog || !$product_id) {
+            return [];
+        }
+        $key = 'omg_blog_rel_v2_' . $product_id;
         $cached = get_transient($key);
         if (is_array($cached)) {
             return $cached;
         }
-        // The game's name without platform/edition words, e.g. "Grand Theft Auto VI".
-        $name = trim((string) preg_replace('/\b(pc|steam|xbox|playstation|ps[45]|nintendo|switch|key|cd|account|gift|global|europe|edition|deluxe|ultimate|standard|or mystery|epic|gog)\b.*$/i', '', $title));
+        $name = self::game_name((string) get_the_title($product_id));
+        $tiers = [];
+        if (mb_strlen($name) >= 3) {
+            $tiers[] = [$name];
+            if ($series = self::series($name)) {
+                $tiers[] = [$series];
+            }
+        }
+        $tiers[] = array_merge(self::term_names($product_id, 'pa_publishers', 1), self::term_names($product_id, 'pa_developers', 1));
+        $tiers[] = self::term_names($product_id, 'pa_genres', 3);
+        $platform_tier = self::term_names($product_id, 'pa_platform', 1);
+
         switch_to_blog($blog);
         $out = [];
         $seen = [];
-        $add = static function (array $ids) use (&$out, &$seen): void {
-            foreach ($ids as $id) {
-                if (count($out) >= 4 || isset($seen[$id])) {
+        $find = static function (array $phrases) use (&$out, &$seen): void {
+            foreach ($phrases as $phrase) {
+                $phrase = trim((string) $phrase);
+                if (count($out) >= 4 || mb_strlen($phrase) < 3) {
                     continue;
                 }
-                $seen[$id] = 1;
-                $out[] = [
-                    'title' => html_entity_decode(get_the_title($id), ENT_QUOTES),
-                    'url' => get_permalink($id),
-                    'image' => get_the_post_thumbnail_url($id, 'medium_large') ?: '',
-                    'date' => get_the_date('M j, Y', $id),
-                    'excerpt' => wp_trim_words(wp_strip_all_tags(get_the_excerpt($id)), 18),
-                ];
+                // Whole-phrase search ("Euro Truck Simulator", not any of its words); titles rank first.
+                $ids = get_posts(['s' => $phrase, 'sentence' => true, 'post_type' => 'post', 'post_status' => 'publish', 'numberposts' => 4, 'fields' => 'ids', 'orderby' => 'relevance']);
+                foreach ($ids as $id) {
+                    if (count($out) >= 4 || isset($seen[$id])) {
+                        continue;
+                    }
+                    $seen[$id] = 1;
+                    $out[] = [
+                        'title' => html_entity_decode(get_the_title($id), ENT_QUOTES),
+                        'url' => get_permalink($id),
+                        'image' => get_the_post_thumbnail_url($id, 'medium_large') ?: '',
+                        'date' => get_the_date('M j, Y', $id),
+                    ];
+                }
             }
         };
-        if (strlen($name) >= 3) {
-            $add(get_posts(['s' => $name, 'post_type' => 'post', 'post_status' => 'publish', 'numberposts' => 4, 'fields' => 'ids']));
+        foreach ($tiers as $phrases) {
+            $find($phrases);
         }
-        $add(get_posts(['post_type' => 'post', 'post_status' => 'publish', 'numberposts' => 8, 'fields' => 'ids']));
+        if (!$out) {
+            $find($platform_tier); // the platform only when nothing more specific exists
+        }
         restore_current_blog();
         set_transient($key, $out, 6 * HOUR_IN_SECONDS);
         return $out;
@@ -89,7 +142,7 @@ final class OMG_Blogs
         if (!function_exists('is_product') || !is_product()) {
             return;
         }
-        $posts = self::posts_for((string) get_the_title(get_queried_object_id()));
+        $posts = self::posts_for((int) get_queried_object_id());
         if (!$posts) {
             return;
         }

@@ -23,6 +23,50 @@ final class OMG_Brand_Archives
         add_filter('woocommerce_attribute_label', [__CLASS__, 'label'], 20, 3);
         add_filter('bricks/frontend/render_data', [__CLASS__, 'spec_links'], 45);
         add_filter('bricks/frontend/render_data', [__CLASS__, 'kicker'], 46);
+        add_filter('bricks/frontend/render_data', [__CLASS__, 'genre_chips'], 47);
+    }
+
+    /** Product page "Genre" chips (#omg-dg-genre) link to their genre pages. */
+    public static function genre_chips($html)
+    {
+        if (!is_string($html) || strpos($html, 'omg-dg-genre') === false || !function_exists('is_product') || !is_product()) {
+            return $html;
+        }
+        $links = [];
+        foreach (['pa_genres', 'product_cat'] as $tax) {
+            $terms = taxonomy_exists($tax) ? wp_get_post_terms((int) get_queried_object_id(), $tax) : [];
+            foreach (is_wp_error($terms) ? [] : $terms as $t) {
+                $url = get_term_link($t);
+                $key = mb_strtolower(trim(html_entity_decode($t->name, ENT_QUOTES)));
+                if (!is_wp_error($url) && !isset($links[$key])) {
+                    $links[$key] = $url; // genre pages first, collections only as a fallback
+                }
+            }
+        }
+        if (!$links) {
+            return $html;
+        }
+        $start = strpos($html, 'id="omg-dg-genre"');
+        $end = $start === false ? false : strpos($html, '<!--brx-loop-end', $start);
+        if ($start === false) {
+            return $html;
+        }
+        $end = $end === false ? min(strlen($html), $start + 6000) : $end;
+        $block = substr($html, $start, $end - $start);
+        $block = (string) preg_replace_callback(
+            '~<div class="([^"]*\bomg-dg-chip\b[^"]*)"(\s[^>]*)?>\s*(<span[^>]*>)(.*?)(</span>)\s*</div>~s',
+            static function ($m) use ($links) {
+                $key = mb_strtolower(trim(html_entity_decode(wp_strip_all_tags($m[4]), ENT_QUOTES)));
+                if (!isset($links[$key])) {
+                    return $m[0];
+                }
+                return '<a class="' . $m[1] . ' omg-dg-chip-link" href="' . esc_url($links[$key]) . '">' . $m[3] . $m[4] . $m[5] . '</a>';
+            },
+            $block
+        );
+        $css = '<style id="omg-genre-chip-links">a.omg-dg-chip-link{text-decoration:none!important;cursor:pointer;transition:border-color .15s,color .15s,background-color .15s}'
+            . 'a.omg-dg-chip-link:hover,a.omg-dg-chip-link:focus-visible{border-color:#8b5cf6!important;color:#fff!important}a.omg-dg-chip-link:hover span{color:#fff!important}</style>';
+        return substr($html, 0, $start) . $block . substr($html, $end) . $css;
     }
 
     /** The archive hero's small label reads "Publisher" / "Developer" instead of the template's "Collections". */

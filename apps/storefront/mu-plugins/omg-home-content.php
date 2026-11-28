@@ -44,6 +44,9 @@ final class OMG_Home_Content
             return $vars;
         }
         $ids = omg_home_section($key);
+        if ($key === 'flash' && class_exists('OMG_SEO')) {
+            $ids = array_values(array_filter($ids, static fn ($id) => !OMG_SEO::physical((int) $id)));
+        }
         if (!$ids) {
             return $vars; // nothing chosen: the section stays automatic
         }

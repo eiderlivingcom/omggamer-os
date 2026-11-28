@@ -84,7 +84,7 @@ final class OMG_Flash
             }));
         }
         $w = self::window();
-        $cache = 'omg_flash_' . $w['idx'] . '_' . md5(wp_json_encode(self::settings()));
+        $cache = 'omg_flash_v2_' . $w['idx'] . '_' . md5(wp_json_encode(self::settings()));
         $ids = get_transient($cache);
         if (!is_array($ids)) {
             global $wpdb;
@@ -124,6 +124,10 @@ final class OMG_Flash
     /** The extra discount would actually lower the price (stays above the profit floor). */
     private static function flashable(WC_Product $p): bool
     {
+        // Flash deals are for digital products; hardware and accessories have their own home sections.
+        if (class_exists('OMG_SEO') && OMG_SEO::physical($p->get_id())) {
+            return false;
+        }
         $check = $p->is_type('variable') ? array_slice($p->get_children(), 0, 6) : [$p->get_id()];
         foreach ($check as $cid) {
             $base = self::base_price((int) $cid);
