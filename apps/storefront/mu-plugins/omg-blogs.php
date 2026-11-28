@@ -84,7 +84,7 @@ final class OMG_Blogs
         if (!$blog || !$product_id) {
             return [];
         }
-        $key = 'omg_blog_rel_v4_' . $product_id;
+        $key = 'omg_blog_rel_v5_' . $product_id;
         $cached = get_transient($key);
         if (is_array($cached)) {
             return $cached;
@@ -99,13 +99,14 @@ final class OMG_Blogs
         }
         $genre_tier = self::term_names($product_id, 'pa_genres', 3);
         $tiers[] = $genre_tier;
-        $tiers[] = array_merge(self::term_names($product_id, 'pa_publishers', 1), self::term_names($product_id, 'pa_developers', 1));
+        $maker_tier = array_merge(self::term_names($product_id, 'pa_publishers', 1), self::term_names($product_id, 'pa_developers', 1));
+        $tiers[] = $maker_tier;
         $platform_tier = self::term_names($product_id, 'pa_platform', 1);
 
         switch_to_blog($blog);
         $out = [];
         $seen = [];
-        // $in_title: broad words (genre, platform) only count when the title has them as a whole word.
+        // $in_title: broad words (genre, publisher / developer, platform) only count when the title has them as a whole word.
         $find = static function (array $phrases, bool $in_title = false) use (&$out, &$seen): void {
             foreach ($phrases as $phrase) {
                 $phrase = trim((string) $phrase);
@@ -135,7 +136,7 @@ final class OMG_Blogs
             }
         };
         foreach ($tiers as $i => $phrases) {
-            $find($phrases, $phrases === $genre_tier);
+            $find($phrases, $phrases && ($phrases === $genre_tier || $phrases === $maker_tier));
         }
         if (!$out) {
             $find($platform_tier, true); // the platform only when nothing more specific exists

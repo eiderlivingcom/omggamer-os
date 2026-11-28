@@ -12,7 +12,7 @@ if (!$p) {
 	WP_CLI::error('Product not found: ' . $slug);
 }
 if (($args[1] ?? '') === 'fresh') {
-	foreach (['omg_blog_rel_v4_', 'omg_blog_rel_v3_'] as $k) {
+	foreach (['omg_blog_rel_v5_', 'omg_blog_rel_v4_'] as $k) {
 		delete_transient($k . $p->ID);
 	}
 }
