@@ -183,7 +183,7 @@ final class OMG_Account_Orders
                     continue;
                 }
                 $rg = self::region($item);
-                $out .= $item->get_name() . ($rg !== '' ? ' (' . $rg . ')' : '') . "\n";
+                $out .= $item->get_name() . ($rg !== '' && stripos($item->get_name(), $rg) === false ? ' (' . $rg . ')' : '') . "\n";
                 foreach ($keys as $k) {
                     $p = self::parse_key($k);
                     if ($p['kind'] === 'image') {

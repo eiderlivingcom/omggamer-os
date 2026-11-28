@@ -5,8 +5,8 @@
  *              gift links and image keys shown properly, order details and receipts; settings, linked accounts,
  *              communication preferences, password and security; payment settings with an account balance
  *              (top-ups issued by OMGGamer and redeemable top-up codes, payable at checkout), transactions and
- *              the PRO membership.
- * Version: 1.0.0
+ *              the PRO membership. Orders get a unique 5–9 digit order number; customers a 9-digit customer ID.
+ * Version: 1.1.0
  * Requires Plugins: woocommerce
  * Author: OMGGamer
  */
@@ -15,12 +15,13 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OMG_ACCOUNT_VERSION', '1.0.0');
+define('OMG_ACCOUNT_VERSION', '1.1.0');
 define('OMG_ACCOUNT_URL', plugin_dir_url(__FILE__));
 
 require_once __DIR__ . '/includes/class-omg-wallet.php';
 require_once __DIR__ . '/includes/class-omg-account-orders.php';
 require_once __DIR__ . '/includes/class-omg-account.php';
+require_once __DIR__ . '/includes/class-omg-ids.php';
 
 add_action('plugins_loaded', static function () {
     if (!class_exists('WooCommerce')) {
@@ -29,6 +30,7 @@ add_action('plugins_loaded', static function () {
     OMG_Wallet::init();
     OMG_Account_Orders::init();
     OMG_Account::init();
+    OMG_Ids::init();
 }, 15);
 
 register_activation_hook(__FILE__, static function () {

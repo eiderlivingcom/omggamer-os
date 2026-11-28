@@ -266,7 +266,7 @@ final class OMG_Account
         $u = wp_get_current_user();
         $m = static fn (string $k) => (string) get_user_meta($u->ID, $k, true);
         self::head('Settings', 'Manage your account details.');
-        echo '<section class="oa-sec"><h2>Account information</h2><p class="oa-id">Customer ID: <b>' . esc_html(str_pad((string) $u->ID, 6, '0', STR_PAD_LEFT)) . '</b></p>';
+        echo '<section class="oa-sec"><h2>Account information</h2><p class="oa-id">Customer ID: <b>' . esc_html(class_exists('OMG_Ids') ? OMG_Ids::customer_id($u->ID) : (string) $u->ID) . '</b></p>';
         echo self::form_open('profile') . '<div class="oa-row">' . self::field('display_name', 'Display name', $u->display_name, ['required' => true, 'auto' => 'nickname'])
             . '</div><button class="oa-btn pri" type="submit">Save display name</button></form>';
         echo self::form_open('email') . '<div class="oa-row">' . self::field('email', 'Email address', $u->user_email, ['type' => 'email', 'required' => true, 'auto' => 'email'])

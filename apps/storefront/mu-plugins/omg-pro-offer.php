@@ -27,6 +27,8 @@ final class OMG_Pro_Offer
         }
         add_filter('woocommerce_product_get_regular_price', [__CLASS__, 'regular'], 6, 2);
         add_filter('woocommerce_product_is_on_sale', [__CLASS__, 'on_sale'], 20, 2);
+        add_filter('woocommerce_subscriptions_product_trial_length', [__CLASS__, 'sub_trial'], 20, 2);
+        add_filter('woocommerce_subscriptions_product_sign_up_fee', [__CLASS__, 'sub_fee'], 20, 2);
         add_filter('woocommerce_coupon_is_valid_for_product', [__CLASS__, 'coupon_product'], 20, 2);
         add_filter('get_post_metadata', [__CLASS__, 'live_pro_meta'], 20, 4);
         add_filter('woocommerce_get_item_data', [__CLASS__, 'item_note'], 20, 2);
@@ -321,14 +323,23 @@ final class OMG_Pro_Offer
         return $product instanceof WC_Product && $product->get_id() === self::PRODUCT;
     }
 
+    /** PRO sold as a WooCommerce Subscriptions product: its own price is the monthly price, the offer is trial + fee. */
+    private static function is_sub($product): bool
+    {
+        return $product instanceof WC_Product && $product->is_type(['subscription', 'variable-subscription']);
+    }
+
     public static function regular($price, $product)
     {
+        if (self::is_pro($product) && self::is_sub($product)) {
+            return $price;
+        }
         return self::is_pro($product) ? (string) self::MONTHLY : $price;
     }
 
     public static function price($price, $product)
     {
-        if (!self::is_pro($product)) {
+        if (!self::is_pro($product) || self::is_sub($product)) {
             return $price;
         }
         if (current_filter() === 'woocommerce_product_get_sale_price') {
@@ -339,7 +350,27 @@ final class OMG_Pro_Offer
 
     public static function on_sale($on, $product)
     {
+        if (self::is_pro($product) && self::is_sub($product)) {
+            return false;
+        }
         return self::is_pro($product) ? self::eligible() : $on;
+    }
+
+    /** First month: a 1-month trial plus the first-month fee, only for customers who never had PRO. */
+    public static function sub_trial($length, $product)
+    {
+        return self::is_pro($product) && !self::eligible() ? 0 : $length;
+    }
+
+    public static function sub_fee($fee, $product)
+    {
+        if (!self::is_pro($product)) {
+            return $fee;
+        }
+        if (!self::eligible()) {
+            return 0;
+        }
+        return class_exists('OMG_Markets') && OMG_Markets::applies() ? (OMG_Markets::convert(self::FIRST) ?? self::FIRST) : self::FIRST;
     }
 
     /** Promo codes skip the PRO membership; they still discount every other product in the cart. */

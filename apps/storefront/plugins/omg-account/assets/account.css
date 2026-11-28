@@ -113,6 +113,7 @@ body.omg-acc2 .woocommerce-MyAccount-content a{color:#c4b5fd}
 .oa-key-err{margin:0!important;color:#fda4af}
 .oa-copy{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:9px;border:1px solid #3a3358;background:#2a2540;color:#fff;font:600 13px Poppins,sans-serif;cursor:pointer}
 .oa-copy:hover{background:#352e50}
+.oa-copy,.oa-key-v .oa-btn{flex:0 0 auto;color:#fff!important}
 .oa-key-wait,.oa-ship-line{margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);color:#fcd34d;font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:center}
 .oa-ship-line{background:#1b1728;border-color:var(--oa-line);color:var(--oa-mu)}
 .oa-spin{width:14px;height:14px;border:2px solid #fcd34d;border-right-color:transparent;border-radius:50%;animation:oaspin .8s linear infinite;flex:0 0 auto}
