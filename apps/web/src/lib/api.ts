@@ -191,6 +191,16 @@ export type SupplierProductRef = {
   import_status: string;
   last_fetched_at: string | null;
 };
+/** Store page sections written by AI Studio (published to the matching sections on omggamer.com). */
+export type ContentSections = {
+  edition_includes?: string[];
+  activation_steps?: string[];
+  system_requirements?: string[];
+  product_pills?: string[];
+  region_warning?: string;
+  delivery_note?: string;
+  metacritic_score?: string;
+};
 export type Content = {
   id: string;
   locale: string;
@@ -207,6 +217,8 @@ export type Content = {
   model: string | null;
   prompt_version: string | null;
   generated_at: string | null;
+  focus_keyword?: string | null;
+  sections?: ContentSections;
   is_current?: boolean;
   created_at?: string;
   [k: string]: unknown;

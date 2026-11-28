@@ -36,6 +36,8 @@ from app.core.logging import log
 from app.db.models import AiJob, IntegrationCredential, Product, ProductCategory
 
 SLOTS_KEY = "omgos:ai:slots"
+# The answer carries the store page sections as well as the copy: room for all of it.
+MIN_OUTPUT_TOKENS = 3500
 SLOT_TTL = 600  # a crashed worker's slot frees itself after 10 minutes
 # Tests point the client at an httpx.MockTransport; production leaves this None.
 transport_override: httpx.AsyncBaseTransport | None = None
@@ -105,7 +107,9 @@ class AiRunner:
             return await self._complete(db, job, "skipped_no_data", "No supplier data to write from")
         digest = content_mod.source_hash(facts, description)
         prompt = await ai_settings.active_prompt(db)
-        prompt_version = f"content-v{prompt.version}"
+        # The field prompts (AI Studio > Prompts) are part of the version: editing one regenerates on the
+        # next run.
+        prompt_version = f"content-v{prompt.version}-f{ai_settings.field_prompts_digest(settings)}"
         locale = str(settings.get("locale") or "en")
         current = await ContentRepository(db).current(product.id, locale)
         if (
@@ -129,9 +133,13 @@ class AiRunner:
             "brand_voice": settings["brand_voice"],
             "seo_requirements": settings["seo_requirements"],
             "product_name": product.canonical_title,
+            "field_instructions": ai_settings.field_instructions(settings),
         }
         system = ai_settings.render(prompt.system_prompt, values)
         user = ai_settings.render(prompt.user_template, values)
+        if "{field_instructions}" not in prompt.user_template:
+            # Templates saved before the field prompts existed still get them, after the template's own text.
+            user = f"{user}\n\n{values['field_instructions']}"
         model = str(settings["model"])
         temperature = float(settings["temperature"]) if settings.get("send_temperature", True) else None
 
@@ -156,7 +164,7 @@ class AiRunner:
                     user=user,
                     schema_name="omggamer_product_content",
                     schema=content_mod.OUTPUT_SCHEMA,
-                    max_output_tokens=int(settings["max_output_tokens"]),
+                    max_output_tokens=max(int(settings["max_output_tokens"]), MIN_OUTPUT_TOKENS),
                     temperature=temperature,
                 )
             except AiRequestError as exc:
@@ -167,7 +175,7 @@ class AiRunner:
                         user=user,
                         schema_name="omggamer_product_content",
                         schema=content_mod.OUTPUT_SCHEMA,
-                        max_output_tokens=int(settings["max_output_tokens"]),
+                        max_output_tokens=max(int(settings["max_output_tokens"]), MIN_OUTPUT_TOKENS),
                         temperature=None,
                     )
                 else:
@@ -209,6 +217,8 @@ class AiRunner:
                 "long_description": clean["long_description"],
                 "meta_title": clean["meta_title"],
                 "meta_description": clean["meta_description"],
+                "focus_keyword": clean["focus_keyword"] or None,
+                "sections": clean["sections"],
                 "tags": clean["tags"],
                 "image_alt_text": clean["image_alt_text"],
                 "suggested_category": clean["suggested_category"],

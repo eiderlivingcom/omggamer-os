@@ -241,6 +241,10 @@ class ProductContent(UUIDPk, Timestamps, Base):
     )
     review_flags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
     source_hash: Mapped[str | None] = mapped_column(String(64))  # facts the content was generated from
+    # Store page sections (edition_includes, activation_steps, system_requirements: lists; region_warning,
+    # delivery_note, metacritic_score: text; product_pills: list) and the Rank Math focus keyword.
+    focus_keyword: Mapped[str | None] = mapped_column(String(120))
+    sections: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     ai_job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("ai_jobs.id", ondelete="SET NULL"))
 
 

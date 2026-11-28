@@ -81,6 +81,160 @@ Original supplier description (plain text, may be empty):
 Write the OMGGamer product content."""
 
 
+# One prompt per field of the AI answer, edited in AI Studio > Prompts. Each runs for the individual
+# product: it is sent with that product's facts. "where" says where the field ends up on the store.
+FIELD_PROMPTS: list[dict[str, str]] = [
+    {
+        "key": "title",
+        "label": "Product title",
+        "where": "Product name",
+        "default": (
+            "SEO-friendly product title: the product name, plus the edition and platform when the "
+            "facts give them."
+        ),
+    },
+    {
+        "key": "short_description",
+        "label": "Short description",
+        "where": "Shown under the price",
+        "default": (
+            "One or two sentences saying what the buyer gets: the game, edition, platform and how it "
+            "is delivered, from the facts."
+        ),
+    },
+    {
+        "key": "long_description",
+        "label": "Full description",
+        "where": "Overview tab",
+        "default": (
+            "Plain text, 3 to 5 short paragraphs separated by blank lines: what the game is, what "
+            "this edition or product includes, and how it is delivered and activated. No HTML, no "
+            "markdown."
+        ),
+    },
+    {
+        "key": "edition_includes",
+        "label": "Edition includes",
+        "where": "Page section: Edition includes",
+        "default": (
+            "3 to 8 items listing only content the edition is known to include, from the facts or "
+            "description. Empty list if the data does not say."
+        ),
+    },
+    {
+        "key": "activation_steps",
+        "label": "Activation steps",
+        "where": "Page section: Activation steps",
+        "default": (
+            "3 to 6 short steps that fit the product type and activation method in the facts (account"
+            " login, key redemption on the platform, or gift link). One action per step."
+        ),
+    },
+    {
+        "key": "system_requirements",
+        "label": "System requirements",
+        "where": "Page section: System requirements",
+        "default": (
+            'Lines like "OS: Windows 10 64-bit". Start a group with "## Minimum" or "## Recommended" '
+            "when the data has both. Empty list for consoles or when the data does not give "
+            "requirements."
+        ),
+    },
+    {
+        "key": "region_warning",
+        "label": "Region warning",
+        "where": "Region note on the product page",
+        "default": (
+            "One or two sentences on where this product works, from the region facts. Empty when the "
+            "region is global or worldwide."
+        ),
+    },
+    {
+        "key": "delivery_note",
+        "label": "Delivery note",
+        "where": "Delivery line in the buy box",
+        "default": 'Under 60 characters, for example "Instant, by email and dashboard".',
+    },
+    {
+        "key": "product_pills",
+        "label": "Product pills",
+        "where": "Selling points under the title",
+        "default": (
+            "2 or 3 short selling points from the facts (platform, edition, delivery), each under 22 "
+            "characters."
+        ),
+    },
+    {
+        "key": "metacritic_score",
+        "label": "Metacritic score",
+        "where": "Metacritic badge",
+        "default": (
+            "The Metacritic score as a number only, and only when the facts or description give it. "
+            "Otherwise an empty string."
+        ),
+    },
+    {
+        "key": "tags",
+        "label": "Tags",
+        "where": "Product tags",
+        "default": (
+            "3 to 10 short lowercase tags taken from the facts (genre, platform, edition, product " "type)."
+        ),
+    },
+    {
+        "key": "meta_title",
+        "label": "SEO title",
+        "where": "Rank Math SEO title",
+        "default": "Up to 60 characters, includes the platform and the focus keyword.",
+    },
+    {
+        "key": "meta_description",
+        "label": "SEO description",
+        "where": "Rank Math meta description",
+        "default": "120 to 160 characters. Must contain the focus keyword exactly as written.",
+    },
+    {
+        "key": "focus_keyword",
+        "label": "Focus keyword",
+        "where": "Rank Math focus keyword",
+        "default": (
+            "The phrase a buyer would search for this product: usually the game name plus the "
+            "platform, 2 to 5 words, lowercase."
+        ),
+    },
+    {
+        "key": "image_alt_text",
+        "label": "Image alt text",
+        "where": "Alt text and file name of each image",
+        "default": (
+            "Game name, edition or year if known, platform and what the image shows, 5 to 12 words. "
+            "No file extensions or symbols."
+        ),
+    },
+]
+FIELD_KEYS = [f["key"] for f in FIELD_PROMPTS]
+
+
+def field_prompts(settings: dict[str, Any]) -> dict[str, str]:
+    """The prompt for each field: the saved one, else the default."""
+    saved = settings.get("field_prompts") or {}
+    return {f["key"]: (str(saved.get(f["key"]) or "").strip() or f["default"]) for f in FIELD_PROMPTS}
+
+
+def field_instructions(settings: dict[str, Any]) -> str:
+    prompts = field_prompts(settings)
+    lines = [f"- {k}: {prompts[k]}" for k in FIELD_KEYS]
+    return "Instructions for each field of your JSON answer:\n" + "\n".join(lines)
+
+
+def field_prompts_digest(settings: dict[str, Any]) -> str:
+    """Short fingerprint of the field prompts, part of the prompt version so a change regenerates content."""
+    import hashlib
+
+    blob = json.dumps(field_prompts(settings), sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode()).hexdigest()[:6]
+
+
 def merged(value: dict[str, Any] | None) -> dict[str, Any]:
     out = {**DEFAULTS, **(value or {})}
     out["pricing"] = {**DEFAULTS["pricing"], **((value or {}).get("pricing") or {})}

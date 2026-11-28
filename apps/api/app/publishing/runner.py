@@ -5,6 +5,7 @@ and the product's category paths. An unchanged payload is not sent again. Every 
 sync_logs; the storefront product ID is saved in storefront_product_mappings.
 """
 
+import html
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -490,7 +491,12 @@ async def build_payload(
         "seo": {
             "title": content.meta_title if content else "",
             "description": content.meta_description if content else "",
+            # Only when there is one, so products without it keep their last-sync fingerprint.
+            **({"focus_keyword": content.focus_keyword} if content and content.focus_keyword else {}),
         },
+        # Store page sections, in the meta keys the product page and its editor read. Sent only when the
+        # content has them (content written before sections existed leaves the store's sections alone).
+        **({"content_meta": section_meta(content.sections)} if content and content.sections else {}),
     }
 
 
@@ -852,6 +858,47 @@ TYPE_WORDS = {
     "game_account": "Account",
     "subscription": "Subscription",
 }
+
+
+def _list_html(items: list[str], tag: str) -> str:
+    """List items as the store keeps them: <ul>/<ol>, and "## Heading" items as <p><strong> group headings."""
+    out: list[str] = []
+    open_list = False
+    for raw in items:
+        item = str(raw).strip()
+        if not item:
+            continue
+        if item.startswith("## "):
+            if open_list:
+                out.append(f"</{tag}>")
+                open_list = False
+            out.append(f"<p><strong>{html.escape(item[3:].strip())}</strong></p>")
+            continue
+        if not open_list:
+            out.append(f"<{tag}>")
+            open_list = True
+        out.append(f"<li>{html.escape(item)}</li>")
+    if open_list:
+        out.append(f"</{tag}>")
+    return "".join(out)
+
+
+def section_meta(sections: dict[str, Any]) -> dict[str, str]:
+    """product_content.sections -> the store's meta keys (an empty value clears that section)."""
+    s = sections or {}
+
+    def items(key: str) -> list[str]:
+        return [str(i) for i in (s.get(key) or []) if str(i).strip()]
+
+    return {
+        "omg_whats_included": _list_html(items("edition_includes"), "ul"),
+        "omg_activation_steps": _list_html(items("activation_steps"), "ol"),
+        "omg_system_requirements": _list_html(items("system_requirements"), "ul"),
+        "omg_region_warning": str(s.get("region_warning") or "").strip(),
+        "omg_delivery_note": str(s.get("delivery_note") or "").strip(),
+        "omg_pills": ", ".join(items("product_pills")),
+        "omg_metacritic": str(s.get("metacritic_score") or "").strip(),
+    }
 
 
 def image_seo(

@@ -165,6 +165,9 @@ class OMG_Connector_Products
 
         $this->sync_images($product_id, (array) ($p['images'] ?? []));
         $this->seo($product_id, (array) ($p['seo'] ?? []));
+        if (isset($p['content_meta']) && is_array($p['content_meta'])) {
+            $this->content_meta($product_id, $p['content_meta']);
+        }
         wc_delete_product_transients($product_id);
 
         return [
@@ -719,10 +722,56 @@ class OMG_Connector_Products
         }
     }
 
+    /**
+     * Store page sections written in OMGGamer OS AI Studio, in the meta keys the product page and its editor read.
+     * Only these keys are accepted; an empty value removes that section.
+     */
+    private const CONTENT_META = [
+        'omg_whats_included' => 'html',
+        'omg_activation_steps' => 'html',
+        'omg_system_requirements' => 'html',
+        'omg_region_warning' => 'text',
+        'omg_delivery_note' => 'text',
+        'omg_pills' => 'text',
+        'omg_metacritic' => 'number',
+    ];
+
+    private function content_meta($product_id, array $meta)
+    {
+        foreach (self::CONTENT_META as $key => $kind) {
+            if (!array_key_exists($key, $meta)) {
+                continue;
+            }
+            $raw = is_scalar($meta[$key]) ? (string) $meta[$key] : '';
+            if ($kind === 'html') {
+                $val = trim(wp_kses_post($raw));
+            } elseif ($kind === 'number') {
+                $val = preg_match('/^\d{1,3}$/', trim($raw)) ? trim($raw) : '';
+            } else {
+                $val = sanitize_text_field($raw);
+            }
+            if ($val === '') {
+                delete_post_meta($product_id, $key);
+            } else {
+                update_post_meta($product_id, $key, $val);
+            }
+        }
+    }
+
     private function seo($product_id, array $seo)
     {
         $title = isset($seo['title']) ? sanitize_text_field($seo['title']) : '';
         $desc = isset($seo['description']) ? sanitize_text_field($seo['description']) : '';
+        $keyword = isset($seo['focus_keyword']) ? sanitize_text_field($seo['focus_keyword']) : '';
+        if ($keyword !== '') {
+            if (class_exists('RankMath')) {
+                update_post_meta($product_id, 'rank_math_focus_keyword', $keyword);
+            }
+            if (defined('WPSEO_VERSION')) {
+                update_post_meta($product_id, '_yoast_wpseo_focuskw', $keyword);
+            }
+            update_post_meta($product_id, '_omg_seo_focus_keyword', $keyword);
+        }
         if ($title === '' && $desc === '') {
             return;
         }

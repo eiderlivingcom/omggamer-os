@@ -26,6 +26,14 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         "suggested_category",
         "image_alt_text",
         "missing_information",
+        "focus_keyword",
+        "edition_includes",
+        "activation_steps",
+        "system_requirements",
+        "region_warning",
+        "delivery_note",
+        "product_pills",
+        "metacritic_score",
     ],
     "properties": {
         "title": {"type": "string", "description": "SEO-friendly product title"},
@@ -56,7 +64,27 @@ OUTPUT_SCHEMA: dict[str, Any] = {
             },
         },
         "missing_information": {"type": "array", "items": {"type": "string"}},
+        # Store page sections and the Rank Math focus keyword (see the field prompts in AI Studio > Prompts).
+        "focus_keyword": {"type": "string"},
+        "edition_includes": {"type": "array", "items": {"type": "string"}},
+        "activation_steps": {"type": "array", "items": {"type": "string"}},
+        "system_requirements": {"type": "array", "items": {"type": "string"}},
+        "region_warning": {"type": "string"},
+        "delivery_note": {"type": "string"},
+        "product_pills": {"type": "array", "items": {"type": "string"}},
+        "metacritic_score": {"type": "string"},
     },
+}
+
+# Store page sections kept in product_content.sections: key -> (kind, max items, max characters per item).
+SECTIONS: dict[str, tuple[str, int, int]] = {
+    "edition_includes": ("list", 12, 200),
+    "activation_steps": ("list", 10, 300),
+    "system_requirements": ("list", 40, 200),
+    "product_pills": ("list", 3, 30),
+    "region_warning": ("text", 1, 400),
+    "delivery_note": ("text", 1, 80),
+    "metacritic_score": ("text", 1, 3),
 }
 
 
@@ -230,10 +258,24 @@ def check(
     written = fold(
         " ".join(
             str(out.get(k) or "")
-            for k in ("title", "short_description", "long_description", "meta_title", "meta_description")
+            for k in (
+                "title",
+                "short_description",
+                "long_description",
+                "meta_title",
+                "meta_description",
+                "region_warning",
+                "delivery_note",
+            )
         )
         + " "
         + " ".join(out.get("tags") or [])
+        + " "
+        + " ".join(
+            str(i)
+            for k in ("edition_includes", "activation_steps", "product_pills")
+            for i in (out.get(k) or [])
+        )
     )
 
     for label, terms in PLATFORM_TERMS.items():
@@ -283,7 +325,44 @@ def check(
     }
     missing = [str(m) for m in (out.get("missing_information") or []) if str(m).strip()][:20]
     out["missing_information"] = missing
+
+    out["sections"], section_flags = clean_sections(out, facts, description)
+    flags += section_flags
+    for k in SECTIONS:
+        out.pop(k, None)
+    keyword = re.sub(r"\s+", " ", plain_text(str(out.get("focus_keyword") or ""))).strip()[:120]
+    out["focus_keyword"] = keyword
+    if keyword and meta_description and fold(keyword) not in fold(meta_description):
+        flags.append("meta description does not contain the focus keyword")
     return out, flags
+
+
+def clean_sections(
+    out: dict[str, Any], facts: dict[str, Any], description: str
+) -> tuple[dict[str, Any], list[str]]:
+    """Store page sections from the model's answer: plain text, length limits, facts-only system requirements
+    and Metacritic score."""
+    flags: list[str] = []
+    sections: dict[str, Any] = {}
+    for key, (kind, max_items, max_len) in SECTIONS.items():
+        raw = out.get(key)
+        if kind == "list":
+            items = [re.sub(r"\s+", " ", plain_text(str(i))).strip() for i in (raw or []) if i is not None]
+            sections[key] = [i[:max_len] for i in items if i][:max_items]
+        else:
+            sections[key] = re.sub(r"\s+", " ", plain_text(str(raw or ""))).strip()[:max_len]
+    if not facts.get("system_requirements") and sections["system_requirements"]:
+        flags.append("wrote system requirements, which the supplier did not provide (removed)")
+        sections["system_requirements"] = []
+    score = sections["metacritic_score"]
+    if score:
+        corpus = fold(" ".join(str(v) for v in facts.values() if v) + " " + description)
+        if not (score.isdigit() and 0 < int(score) <= 100 and "metacritic" in corpus and score in corpus):
+            flags.append(f"Metacritic score '{score}' is not in the supplier data (removed)")
+            sections["metacritic_score"] = ""
+    if len(sections["delivery_note"]) > 60:
+        flags.append(f"delivery note is {len(sections['delivery_note'])} characters (limit 60)")
+    return sections, flags
 
 
 def structured_info(facts: dict[str, Any]) -> dict[str, Any]:

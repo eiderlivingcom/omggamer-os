@@ -12,6 +12,7 @@ import {
   type BulkResult,
   type CategoryNode,
   type Content,
+  type ContentSections,
   type ProductDetail,
   type PublishingHistory,
   type SupplierProductDetail,
@@ -42,6 +43,51 @@ function Row({ k, v }: { k: string; v: ReactNode }) {
 }
 
 /** Supplier descriptions arrive as HTML. Show them as plain text so supplier markup never runs here. */
+/** The store page sections of the current AI version, as they will appear on omggamer.com. */
+function SectionsCard({ s }: { s: ContentSections }) {
+  const list = (items: string[] | undefined, ordered = false) => {
+    const rows = (items ?? []).filter((i) => i.trim());
+    if (!rows.length) return <span className="text-ink-400">—</span>;
+    const groups: { head: string | null; items: string[] }[] = [];
+    for (const i of rows) {
+      if (i.startsWith("## ")) groups.push({ head: i.slice(3), items: [] });
+      else {
+        let last = groups[groups.length - 1];
+        if (!last) {
+          last = { head: null, items: [] };
+          groups.push(last);
+        }
+        last.items.push(i);
+      }
+    }
+    const L = ordered ? "ol" : "ul";
+    return (
+      <div className="space-y-2">
+        {groups.map((g, n) => (
+          <div key={n}>
+            {g.head && <div className="font-semibold text-ink-900">{g.head}</div>}
+            <L className={cx("space-y-0.5 pl-5", ordered ? "list-decimal" : "list-disc")}>{g.items.map((i, k) => <li key={k}>{i}</li>)}</L>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  const text = (v: string | undefined) => (v && v.trim() ? v : <span className="text-ink-400">—</span>);
+  return (
+    <Card title="Store page sections">
+      <dl className="divide-y divide-ink-100 text-sm">
+        <Row k="Edition includes" v={list(s.edition_includes)} />
+        <Row k="Activation steps" v={list(s.activation_steps, true)} />
+        <Row k="System requirements" v={list(s.system_requirements)} />
+        <Row k="Region warning" v={text(s.region_warning)} />
+        <Row k="Delivery note" v={text(s.delivery_note)} />
+        <Row k="Product pills" v={s.product_pills?.length ? <div className="flex flex-wrap gap-1">{s.product_pills.map((p) => <Pill key={p}>{p}</Pill>)}</div> : text("")} />
+        <Row k="Metacritic score" v={text(s.metacritic_score)} />
+      </dl>
+    </Card>
+  );
+}
+
 function plain(html: string | null | undefined) {
   if (!html) return "";
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -424,6 +470,7 @@ export default function ProductPage() {
               </Card>
             </div>
           )}
+          {c && <SectionsCard s={c.sections ?? {}} />}
           <Card title="Version history">
             {!versions ? <div className="h-16 animate-pulse rounded-lg bg-ink-50" /> : versions.length === 0 ? <Empty title="No versions" /> : (
               <ul className="divide-y divide-ink-100 text-sm">
@@ -475,6 +522,7 @@ export default function ProductPage() {
               </div>
               <dl className="mt-4 divide-y divide-ink-100">
                 <Row k="Meta title" v={c.meta_title && <>{c.meta_title} <span className={cx("text-xs", c.meta_title.length > 60 ? "text-rose-600" : "text-ink-400")}>({c.meta_title.length}/60)</span></>} />
+                <Row k="Focus keyword" v={c.focus_keyword ?? "—"} />
                 <Row k="Meta description" v={c.meta_description && <>{c.meta_description} <span className={cx("text-xs", c.meta_description.length > 160 ? "text-rose-600" : "text-ink-400")}>({c.meta_description.length}/160)</span></>} />
                 <Row k="Slug" v={<span className="font-mono">{p.slug}</span>} />
                 <Row k="Tags" v={c.tags.join(", ")} />

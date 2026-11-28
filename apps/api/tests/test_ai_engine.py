@@ -155,7 +155,8 @@ async def test_generates_checked_content_without_touching_supplier_data(fake: Fa
     jid = await job_for(pid)
     assert (await run().run(jid)).state == "done"
     job = await load(AiJob, jid)
-    assert job.status == "completed" and job.outcome == "generated" and job.prompt_version == "content-v1"
+    assert job.status == "completed" and job.outcome == "generated"
+    assert job.prompt_version.startswith("content-v1-f")
     assert job.token_usage == {"input": 1000, "output": 500}
     assert job.estimated_cost == Decimal("0.000450")  # 1000 * 0.15/M + 500 * 0.60/M
     async with get_sessionmaker()() as db:
@@ -177,6 +178,63 @@ async def test_generates_checked_content_without_touching_supplier_data(fake: Fa
     user = req["messages"][1]["content"]
     assert '"platforms": [\n  "Steam"\n ]' in user and "12.5" not in user  # prices are never sent
     assert "- Action" in user and "Underworld" in user
+
+
+async def test_store_sections_and_focus_keyword(fake: FakeOpenAI) -> None:
+    """The answer's store page sections and Rank Math focus keyword are checked and kept with the version."""
+    pid = await seed()
+    fake.answers.append(
+        {
+            **GOOD,
+            "meta_description": "Buy the hades steam key for PC with instant digital delivery from OMGGamer.",
+            "focus_keyword": "hades steam key",
+            "edition_includes": ["Hades base game", "  "],
+            "activation_steps": ["Open Steam", "<b>Activate</b> a product on Steam", "Enter the key"],
+            "system_requirements": ["## Minimum", "OS: Windows 7"],  # the supplier gave none
+            "region_warning": "",
+            "delivery_note": "Instant, by email and dashboard",
+            "product_pills": ["Steam key", "Instant delivery", "Rogue-like", "Too many"],
+            "metacritic_score": "93",  # not in the supplier data
+        }
+    )
+    jid = await job_for(pid)
+    assert (await run().run(jid)).state == "done"
+    async with get_sessionmaker()() as db:
+        c = (await db.execute(select(ProductContent))).scalar_one()
+    assert c.focus_keyword == "hades steam key"
+    assert c.sections["edition_includes"] == ["Hades base game"]
+    assert c.sections["activation_steps"] == ["Open Steam", "Activate a product on Steam", "Enter the key"]
+    assert c.sections["system_requirements"] == [] and c.sections["metacritic_score"] == ""
+    assert c.sections["product_pills"] == ["Steam key", "Instant delivery", "Rogue-like"]
+    assert c.sections["delivery_note"] == "Instant, by email and dashboard"
+    assert any("system requirements" in f for f in c.review_flags)
+    assert any("Metacritic" in f for f in c.review_flags)
+    user = fake.requests[0]["messages"][1]["content"]
+    assert "Instructions for each field of your JSON answer" in user and "- activation_steps:" in user
+    schema = fake.requests[0]["response_format"]["json_schema"]["schema"]
+    assert set(schema["required"]) >= {"focus_keyword", "activation_steps", "metacritic_score"}
+
+
+async def test_field_prompts_api_and_version(
+    client: AsyncClient, make_user: MakeUser, fake: FakeOpenAI
+) -> None:
+    await make_user("admin@omggamer.com", "super_admin")
+    await login(client, "admin@omggamer.com")
+    r = await client.get("/api/v1/ai/field-prompts")
+    assert r.status_code == 200
+    rows = {f["key"]: f for f in r.json()}
+    assert "activation_steps" in rows and rows["activation_steps"]["customised"] is False
+    r = await client.put(
+        "/api/v1/ai/field-prompts", json={"prompts": {"activation_steps": "Exactly 3 steps."}}
+    )
+    assert r.status_code == 200
+    rows = {f["key"]: f for f in r.json()}
+    assert rows["activation_steps"]["prompt"] == "Exactly 3 steps." and rows["activation_steps"]["customised"]
+    assert (await client.put("/api/v1/ai/field-prompts", json={"prompts": {"nope": "x"}})).status_code == 422
+    pid = await seed()
+    jid = await job_for(pid)
+    assert (await run().run(jid)).state == "done"
+    assert "- activation_steps: Exactly 3 steps." in fake.requests[-1]["messages"][1]["content"]
 
 
 async def test_invented_facts_are_flagged(fake: FakeOpenAI) -> None:
@@ -425,3 +483,15 @@ async def test_provider_cooldown_pauses_the_queue_until_reset(fake: FakeOpenAI) 
     sent = len(fake.requests)
     again = await run().run(jid)  # still cooling down: no request is sent
     assert again.state == "waiting" and len(fake.requests) == sent
+
+
+async def test_remove_a_product_from_the_queue(client: AsyncClient, make_user: MakeUser) -> None:
+    await make_user()
+    await login(client)
+    pid = await seed()
+    jid = await job_for(pid)
+    r = await client.post(f"/api/v1/ai/jobs/{jid}/cancel")
+    assert r.status_code == 200 and r.json()["status"] == "cancelled"
+    assert (await run().run(jid)).state == "stopped"  # the worker skips it
+    assert (await client.post(f"/api/v1/ai/jobs/{jid}/cancel")).status_code == 409
+    assert (await client.post(f"/api/v1/ai/jobs/{uuid.uuid4()}/cancel")).status_code == 404

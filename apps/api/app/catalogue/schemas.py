@@ -190,6 +190,8 @@ class ContentOut(ORM):
     model: str | None
     prompt_version: str | None
     generated_at: datetime | None
+    focus_keyword: str | None = None
+    sections: dict[str, Any] = {}
 
 
 class ProductListItem(BaseModel):

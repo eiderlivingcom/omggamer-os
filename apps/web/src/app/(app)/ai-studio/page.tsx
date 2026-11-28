@@ -105,6 +105,14 @@ export default function AiStudioPage() {
     if (ov) setCount(ov.settings.batch_size);
   }, [ov?.settings.batch_size]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function removeJob(j: Job) {
+    if (!window.confirm(`Remove ${j.product_title ?? "this product"} from the AI queue?`)) return;
+    await act(async () => {
+      await api(`/ai/jobs/${j.id}/cancel`, { method: "POST" });
+      return `${j.product_title ?? "The product"} was removed from the queue.`;
+    });
+  }
+
   async function act(fn: () => Promise<string>) {
     setBusy(true);
     setError(null);
@@ -219,7 +227,7 @@ export default function AiStudioPage() {
           aside={
             <select className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter by status">
               <option value="">All</option>
-              {["queued", "running", "paused", "completed", "failed"].map((s) => <option key={s} value={s}>{s}</option>)}
+              {["queued", "running", "paused", "completed", "failed", "cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           }
         >
@@ -229,7 +237,7 @@ export default function AiStudioPage() {
                 <thead>
                   <tr className="border-b border-ink-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
                     <th className="px-5 py-2">Product</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Result</th>
-                    <th className="px-3 py-2 text-right">Tokens</th><th className="px-3 py-2 text-right">Cost</th><th className="px-5 py-2">When</th>
+                    <th className="px-3 py-2 text-right">Tokens</th><th className="px-3 py-2 text-right">Cost</th><th className="px-3 py-2">When</th><th className="px-5 py-2"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -244,7 +252,19 @@ export default function AiStudioPage() {
                       <td className="px-3 py-2 text-ink-700">{j.outcome?.replace(/_/g, " ") ?? "—"}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{j.token_usage.input ? `${j.token_usage.input} / ${j.token_usage.output}` : "—"}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{Number(j.estimated_cost) ? usd(j.estimated_cost) : "—"}</td>
-                      <td className="px-5 py-2 text-xs text-ink-500">{fmtDate(j.completed_at ?? j.created_at)}</td>
+                      <td className="px-3 py-2 text-xs text-ink-500">{fmtDate(j.completed_at ?? j.created_at)}</td>
+                      <td className="px-5 py-2 text-right">
+                        {can("content:write") && ["queued", "paused", "failed"].includes(j.status) && (
+                          <button
+                            type="button"
+                            onClick={() => removeJob(j)}
+                            className="text-xs font-medium text-rose-700 hover:underline"
+                            aria-label={`Remove ${j.product_title ?? "this product"} from the queue`}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -420,6 +440,7 @@ function Prompts() {
   }
 
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
       <Card title="Prompt template">
         {!draft ? <div className="h-40 animate-pulse rounded-lg bg-ink-50" /> : (
@@ -429,7 +450,7 @@ function Prompts() {
               <textarea rows={14} value={draft.system_prompt} onChange={(e) => setDraft({ ...draft, system_prompt: e.target.value })} className="mt-1 w-full rounded-md border border-ink-200 p-2 font-mono text-[12.5px] font-normal" />
             </label>
             <label className="block text-xs font-semibold text-ink-700">
-              User template — placeholders: {"{facts} {categories} {description} {product_name}"}
+              User template — placeholders: {"{facts} {categories} {description} {product_name} {field_instructions}"}
               <textarea rows={8} value={draft.user_template} onChange={(e) => setDraft({ ...draft, user_template: e.target.value })} className="mt-1 w-full rounded-md border border-ink-200 p-2 font-mono text-[12.5px] font-normal" />
             </label>
             <label className="block text-xs font-semibold text-ink-700">
@@ -452,5 +473,74 @@ function Prompts() {
         </ul>
       </Card>
     </div>
+    <FieldPrompts />
+    </div>
+  );
+}
+
+type FieldPrompt = { key: string; label: string; where: string; prompt: string; default: string; customised: boolean };
+
+/** One prompt per field of the AI answer: the copy, the store page sections and Rank Math SEO. */
+function FieldPrompts() {
+  const [rows, setRows] = useState<FieldPrompt[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const load = useCallback(async () => {
+    const r = await api<FieldPrompt[]>("/ai/field-prompts");
+    setRows(r);
+    setDraft(Object.fromEntries(r.map((f) => [f.key, f.prompt])));
+  }, []);
+  useEffect(() => {
+    void load().catch(() => setRows([]));
+  }, [load]);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setSaving(true);
+    try {
+      const r = await api<FieldPrompt[]>("/ai/field-prompts", { method: "PUT", json: { prompts: draft } });
+      setRows(r);
+      setDraft(Object.fromEntries(r.map((f) => [f.key, f.prompt])));
+      setMsg({ tone: "ok", text: "Saved. The next generation of each product uses these prompts." });
+    } catch (err) {
+      setMsg({ tone: "bad", text: err instanceof ApiError ? err.message : "Could not save." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="Field prompts">
+      <p className="mb-4 text-sm text-ink-500">
+        Each field of the AI content has its own prompt. It runs for every product with that product&rsquo;s facts, and the result is published to the matching place on omggamer.com.
+      </p>
+      {!rows ? <div className="h-40 animate-pulse rounded-lg bg-ink-50" /> : (
+        <form onSubmit={save} className="space-y-4">
+          {rows.map((f) => (
+            <label key={f.key} className="block text-xs font-semibold text-ink-700">
+              <span className="flex flex-wrap items-baseline gap-x-2">
+                {f.label}
+                <span className="font-normal text-ink-500">{f.where}</span>
+                {draft[f.key] !== f.default && (
+                  <button type="button" className="ml-auto font-normal text-brand-700 hover:underline" onClick={() => setDraft({ ...draft, [f.key]: f.default })}>
+                    Reset to default
+                  </button>
+                )}
+              </span>
+              <textarea
+                rows={2}
+                value={draft[f.key] ?? ""}
+                onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                className="mt-1 w-full rounded-md border border-ink-200 p-2 text-[13px] font-normal"
+              />
+            </label>
+          ))}
+          <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save field prompts"}</Button>
+          {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+        </form>
+      )}
+    </Card>
   );
 }

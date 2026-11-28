@@ -299,6 +299,64 @@ async def new_prompt(
     return row
 
 
+class FieldPromptOut(BaseModel):
+    key: str
+    label: str
+    where: str
+    prompt: str
+    default: str
+    customised: bool
+
+
+class FieldPromptsIn(BaseModel):
+    # key -> prompt; an empty prompt goes back to the default.
+    prompts: dict[str, str] = Field(default_factory=dict)
+
+
+@router.get("/field-prompts", response_model=list[FieldPromptOut])
+async def field_prompts(db: DB, _: User = require("ai:manage")) -> list[FieldPromptOut]:
+    s = await ai_settings.get_settings(db)
+    saved = s.get("field_prompts") or {}
+    current = ai_settings.field_prompts(s)
+    return [
+        FieldPromptOut(
+            key=f["key"],
+            label=f["label"],
+            where=f["where"],
+            prompt=current[f["key"]],
+            default=f["default"],
+            customised=bool(str(saved.get(f["key"]) or "").strip()),
+        )
+        for f in ai_settings.FIELD_PROMPTS
+    ]
+
+
+@router.put("/field-prompts", response_model=list[FieldPromptOut])
+async def put_field_prompts(
+    body: FieldPromptsIn, request: Request, db: DB, actor: User = require("ai:manage")
+) -> list[FieldPromptOut]:
+    unknown = set(body.prompts) - set(ai_settings.FIELD_KEYS)
+    if unknown:
+        raise AppError(422, "unknown_field", f"Unknown fields: {', '.join(sorted(unknown))}")
+    defaults = {f["key"]: f["default"] for f in ai_settings.FIELD_PROMPTS}
+    saved: dict[str, str] = {}
+    for key, text in body.prompts.items():
+        text = (text or "").strip()[:2000]
+        if text and text != defaults[key]:
+            saved[key] = text
+    await ai_settings.save_settings(db, {"field_prompts": saved}, actor.id)
+    await record(
+        db,
+        "ai.field_prompts",
+        actor=actor,
+        summary=f"Saved field prompts ({len(saved)} customised)",
+        data={"customised": sorted(saved)},
+        request=request,
+    )
+    await db.commit()
+    return await field_prompts(db, actor)
+
+
 @router.post("/generate", response_model=GenerateOut)
 async def generate(
     body: GenerateIn, request: Request, db: DB, actor: CurrentUser, _: User = require("content:write")
@@ -417,6 +475,34 @@ async def jobs(
         j = JobOut.model_validate(job)
         j.product_title = title
         out.append(j)
+    return out
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobOut)
+async def cancel_job(
+    job_id: uuid.UUID, request: Request, db: DB, actor: User = require("content:write")
+) -> JobOut:
+    """Take one product out of the AI queue. A job that is being written right now cannot be removed."""
+    job = await db.get(AiJob, job_id)
+    if job is None:
+        raise AppError(404, "not_found", "That AI job does not exist.")
+    if job.status not in ("queued", "paused", "failed"):
+        raise AppError(409, "not_cancellable", f"A {job.status} job cannot be removed from the queue.")
+    job.status = "cancelled"
+    job.completed_at = _now()
+    job.error_message = "Removed from the queue"
+    title = await db.scalar(select(Product.canonical_title).where(Product.id == job.product_id))
+    await record(
+        db,
+        "ai.job_cancelled",
+        actor=actor,
+        summary=f"Removed {title or 'a product'} from the AI queue",
+        data={"job_id": str(job.id)},
+        request=request,
+    )
+    await db.commit()
+    out = JobOut.model_validate(job)
+    out.product_title = title
     return out
 
 
