@@ -3,8 +3,8 @@
  * Plugin Name: OMGGamer blog links
  * Description: The blog lives at omggamer.com/blogs/ (site 2 of the network). /blog and anything under it redirect
  *              there (301), the footer "Blog" link points straight at it, and product pages show "From the blog":
- *              up to four articles from /blogs/ related to the product: the game, its series, publisher / developer,
- *              genres, then platform. No related article: no section.
+ *              up to four articles from /blogs/ related to the product: the game, its series, genres, publisher /
+ *              developer, then platform. No related article: no section.
  * Version: 1.0.0
  */
 
@@ -74,8 +74,8 @@ final class OMG_Blogs
     }
 
     /**
-     * Up to 4 blog posts related to the product, most specific first: the game, its series, its publisher /
-     * developer, its genres, and only then its platform. Nothing related → no section (never unrelated posts).
+     * Up to 4 blog posts related to the product, most specific first: the game, its series, its genres, its
+     * publisher / developer, and only then its platform. Nothing related → no section (never unrelated posts).
      * Cached for 6 hours per product.
      */
     private static function posts_for(int $product_id): array
@@ -84,7 +84,7 @@ final class OMG_Blogs
         if (!$blog || !$product_id) {
             return [];
         }
-        $key = 'omg_blog_rel_v2_' . $product_id;
+        $key = 'omg_blog_rel_v3_' . $product_id;
         $cached = get_transient($key);
         if (is_array($cached)) {
             return $cached;
@@ -97,8 +97,8 @@ final class OMG_Blogs
                 $tiers[] = [$series];
             }
         }
-        $tiers[] = array_merge(self::term_names($product_id, 'pa_publishers', 1), self::term_names($product_id, 'pa_developers', 1));
         $tiers[] = self::term_names($product_id, 'pa_genres', 3);
+        $tiers[] = array_merge(self::term_names($product_id, 'pa_publishers', 1), self::term_names($product_id, 'pa_developers', 1));
         $platform_tier = self::term_names($product_id, 'pa_platform', 1);
 
         switch_to_blog($blog);
