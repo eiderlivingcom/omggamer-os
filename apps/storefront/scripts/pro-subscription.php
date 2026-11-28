@@ -53,5 +53,8 @@ foreach ( $meta as $k => $v ) {
 }
 wc_delete_product_transients( $id );
 clean_post_cache( $id );
+wp_cache_delete( 'woocommerce_product_' . $id . '_type', 'products' ); // the object cache keeps the old type
+wp_cache_delete( $id, 'post_meta' );
+WC_Cache_Helper::invalidate_cache_group( 'product_' . $id );
 $p = wc_get_product( $id );
 WP_CLI::success( 'PRO is now a ' . $p->get_type() . ': ' . wp_strip_all_tags( WC_Subscriptions_Product::get_price_string( $p ) ) );
